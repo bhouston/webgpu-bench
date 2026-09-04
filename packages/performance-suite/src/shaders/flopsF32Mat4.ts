@@ -1,5 +1,5 @@
 /**
- * fp32 Mat SIMD FLOPS probe: `x = m * x + c` chained in a register, `m` a
+ * fp32 mat4 FLOPS probe: `x = m * x + c` chained in a register, `m` a
  * 4x4 matrix. `m` is a row-stochastic contraction (rows sum to 1, every
  * entry runtime-derived and non-zero) so the recurrence stays bounded for
  * any iteration count while still exercising a full, non-degenerate

@@ -1,50 +1,59 @@
 import type { GpuContext } from '../gpu/context.ts';
-import { runTimedBenchmark } from '../gpu/benchmarkRunner.ts';
+import { runTimedBenchmark, type SamplingConfig } from '../gpu/benchmarkRunner.ts';
 import type { BenchmarkCategory, BenchmarkResult } from '../types.ts';
 
-export function createPipeline(
+/**
+ * Compiles a shader module and builds a compute pipeline from it, watching
+ * for validation errors via error scopes rather than trusting the WebGPU
+ * calls to throw. Both `createShaderModule` and `createComputePipeline`
+ * (`'auto'` layout) succeed synchronously even when the WGSL fails to
+ * compile or the pipeline is otherwise invalid — the failure only surfaces
+ * later as a device-level 'uncapturederror' when something dispatches
+ * against it. Left unchecked, that means the compute pass silently does
+ * nothing: the command buffer still submits and completes almost
+ * instantly, so a GPU-timestamp read of a never-touched, zero-initialized
+ * query buffer comes back as exactly 0ns elapsed — reported as a
+ * misleadingly "ok" benchmark result with 0s mean/stddev, rather than the
+ * shader-compile failure it actually is.
+ */
+export async function createPipeline(
   device: GPUDevice,
   label: string,
   code: string,
   constants?: Record<string, number>,
-): GPUComputePipeline {
+): Promise<GPUComputePipeline> {
+  device.pushErrorScope('validation');
   const module = device.createShaderModule({ label, code });
-  return device.createComputePipeline({
+  const pipeline = device.createComputePipeline({
     label,
     layout: 'auto',
     compute: { module, entryPoint: 'main', constants },
   });
+  const error = await device.popErrorScope();
+  if (error) {
+    throw new Error(`Failed to create pipeline "${label}": ${error.message}`);
+  }
+  return pipeline;
 }
 
-export interface MatVecFlopStats {
-  rows: number;
-  cols: number;
-  /** Total bytes moved to/from GPU memory per op (matrix + vector, at their storage precision). */
-  bytesPerOp: number;
-  /**
-   * Total FLOPs for one op, overriding the default matvec MAC convention
-   * (`2 * rows * cols`) — used by benchmarks that aren't shaped like a
-   * matvec (bandwidth streams, raw-FLOPS compute kernels).
-   */
-  flopsOverride?: number;
+/** Total FLOPs and bytes moved for one op — each benchmark computes its own, since bandwidth kernels are ~all bytes and compute kernels are ~all FLOPs. */
+export interface ThroughputStats {
+  flops: number;
+  bytes: number;
 }
 
-export function flopsAndBandwidth(stats: MatVecFlopStats, meanMs: number): { gflops: number; gbps: number } {
-  const seconds = meanMs / 1000;
-  const flops = stats.flopsOverride ?? 2 * stats.rows * stats.cols;
+export function flopsAndBandwidth(stats: ThroughputStats, perOpMs: number): { gflops: number; gbps: number } {
+  const seconds = perOpMs / 1000;
   return {
-    gflops: flops / seconds / 1e9,
-    gbps: stats.bytesPerOp / seconds / 1e9,
+    gflops: stats.flops / seconds / 1e9,
+    gbps: stats.bytes / seconds / 1e9,
   };
 }
 
-export interface HarnessConfig {
-  targetMs?: number;
-  warmups?: number;
-  runs?: number;
-}
+/** Sampling knobs (`targetMs`, `warmups`, `minRuns`, `maxRuns`, `precision`) shared by every benchmark. */
+export type HarnessConfig = SamplingConfig;
 
-export interface RunKernelOptions {
+export interface RunKernelOptions extends HarnessConfig {
   id: string;
   label: string;
   description: string;
@@ -52,18 +61,14 @@ export interface RunKernelOptions {
   ctx: GpuContext;
   rows: number;
   cols: number;
-  bytesPerOp: number;
-  /** See {@link MatVecFlopStats.flopsOverride}. */
-  flopsOverride?: number;
+  bytes: number;
+  flops: number;
   workgroupsPerIteration: [number, number, number];
   pipeline: GPUComputePipeline;
   bindGroup: GPUBindGroup;
-  targetMs?: number;
-  warmups?: number;
-  runs?: number;
 }
 
-/** Runs the calibrated warmup+timed-measurement harness for a single matvec kernel and packages a BenchmarkResult. */
+/** Runs the calibrated warmup + adaptive-sampling harness for a single kernel and packages a BenchmarkResult. */
 export async function runKernelBenchmark(opts: RunKernelOptions): Promise<BenchmarkResult> {
   const { ctx, pipeline, bindGroup, workgroupsPerIteration } = opts;
   const timed = await runTimedBenchmark({
@@ -71,7 +76,9 @@ export async function runKernelBenchmark(opts: RunKernelOptions): Promise<Benchm
     useTimestamps: ctx.info.supportsTimestampQuery,
     targetMs: opts.targetMs,
     warmups: opts.warmups,
-    runs: opts.runs,
+    minRuns: opts.minRuns,
+    maxRuns: opts.maxRuns,
+    precision: opts.precision,
     encode: (pass, iterations) => {
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bindGroup);
@@ -81,10 +88,22 @@ export async function runKernelBenchmark(opts: RunKernelOptions): Promise<Benchm
     },
   });
 
-  const { gflops, gbps } = flopsAndBandwidth(
-    { rows: opts.rows, cols: opts.cols, bytesPerOp: opts.bytesPerOp, flopsOverride: opts.flopsOverride },
-    timed.stats.mean,
-  );
+  // A mean of exactly 0 isn't a real timing: it means every readback of the
+  // (zero-initialized) GPU-timestamp buffer came back unwritten, which
+  // happens when the compute pass silently did no work — e.g. an invalid
+  // pipeline/bind group that errors out post-submission rather than at
+  // pipeline-creation time. Surface that as a failure instead of an "ok"
+  // result with a nonsensical 0s/Infinity-throughput row.
+  if (timed.stats.mean <= 0) {
+    throw new Error(
+      `"${opts.label}" measured a mean time of ${timed.stats.mean}ms across ${timed.timesMs.length} runs — the GPU pass likely did no work (check for an 'uncapturederror' in the console).`,
+    );
+  }
+
+  // Throughput is derived from the median rather than the mean: a single
+  // slow run (GPU clock still ramping, a background compositor frame) skews
+  // the mean but leaves the median untouched.
+  const { gflops, gbps } = flopsAndBandwidth({ flops: opts.flops, bytes: opts.bytes }, timed.stats.median);
 
   return {
     id: opts.id,
@@ -97,6 +116,7 @@ export async function runKernelBenchmark(opts: RunKernelOptions): Promise<Benchm
     innerIterations: timed.innerIterations,
     timesMs: timed.timesMs,
     stats: timed.stats,
+    stopReason: timed.stopReason,
     gflops,
     gbps,
     timingMethod: timed.timingMethod,

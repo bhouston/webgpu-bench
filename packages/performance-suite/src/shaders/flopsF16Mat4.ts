@@ -1,5 +1,5 @@
 /**
- * fp16 Mat SIMD FLOPS probe — {@link flopsF32Mat4Wgsl}'s bounded
+ * fp16 mat4 FLOPS probe — {@link flopsF32Mat4Wgsl}'s bounded
  * `x = m * x + c` recurrence, but `m`, `c`, and `x` are all `f16`, so the
  * mat4x4 * vec4 multiply runs entirely in half precision.
  */

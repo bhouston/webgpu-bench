@@ -1,7 +1,7 @@
 /**
- * int8-range Vec SIMD FLOPS probe: {@link flopsI8ScalarWgsl}'s integer FMA
- * chain held in a `vec4<i32>` register, so every multiply/add is a 4-wide
- * integer SIMD op.
+ * int8-range vec4 FLOPS probe: a single integer FMA chain held in a
+ * `vec4<i32>` register (4 independent lanes per step; see the fp32 vec4
+ * probe for why this is ILP, not SIMD, on most GPUs).
  */
 export const flopsI8Vec4Wgsl = /* wgsl */ `
 struct Params {

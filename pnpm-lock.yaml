@@ -69,6 +69,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      humanize-units:
+        specifier: ^2.0.4
+        version: 2.0.4
       lucide-react:
         specifier: ^0.544.0
         version: 0.544.0(react@19.2.8)
@@ -1941,6 +1944,10 @@ packages:
 
   httpxy@0.5.5:
     resolution: {integrity: sha512-uDjmnPyp1q4Sgzf3w+J/Fc6UqcCEj0x4Wjp7OqK5dGhNeDgpyrAmnS6ey8QWrX3SWDon2DMKf9sBa5X9+CVyMA==}
+
+  humanize-units@2.0.4:
+    resolution: {integrity: sha512-QLc2sc/IC8HSrum31dyoGlsnaZpyIWlqCb7KVutIkoHeR2IFQTVUlouA6YJ7C5qD/gKMtAp99yhg8eFXtYPROA==}
+    engines: {node: '>=18'}
 
   husky@9.1.7:
     resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
@@ -4820,6 +4827,8 @@ snapshots:
       - supports-color
 
   httpxy@0.5.5: {}
+
+  humanize-units@2.0.4: {}
 
   husky@9.1.7: {}
 

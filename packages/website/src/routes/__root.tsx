@@ -7,11 +7,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'WebGPU Profiler — LLM MatVec Benchmarks' },
+      { title: 'WebGPU Profiler — Bandwidth & FLOPS Benchmarks' },
       {
         name: 'description',
         content:
-          'Benchmarks WebGPU compute-shader strategies for large matrix-vector multiplication (the core op of LLM inference): f32, f16, int8, SIMD layouts, tuned workgroup sizes, and fused multi-layer MLPs.',
+          'Measures WebGPU read/write memory bandwidth and fp32/fp16/int8 FLOPS (scalar, vec4-SIMD, mat4-SIMD, and packed int8 dot-product) — this device\'s raw compute and memory ceilings.',
       },
     ],
   }),

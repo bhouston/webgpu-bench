@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Device / CPU / GPU Detector</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0b0d12;
+    --panel: #12151c;
+    --border: #232833;
+    --text: #e6e9ef;
+    --muted: #8b93a3;
+    --accent: #5ec8f8;
+    --ok: #5fd68b;
+    --warn: #f5b342;
+    --bad: #f56a6a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem 1.25rem 4rem;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 0.25rem;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin: 0 0 1.5rem;
+    font-size: 0.9rem;
+    max-width: 60rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  section.card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem 1.2rem;
+  }
+  section.card h2 {
+    font-size: 0.95rem;
+    margin: 0 0 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  table tr {
+    border-top: 1px solid var(--border);
+  }
+  table tr:first-child { border-top: none; }
+  table td {
+    padding: 0.35rem 0.15rem;
+    vertical-align: top;
+  }
+  table td.k {
+    color: var(--muted);
+    width: 42%;
+    white-space: nowrap;
+    padding-right: 0.75rem;
+  }
+  table td.v {
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+  .pill {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .pill.ok { background: rgba(95,214,139,0.15); color: var(--ok); }
+  .pill.warn { background: rgba(245,179,66,0.15); color: var(--warn); }
+  .pill.bad { background: rgba(245,106,106,0.15); color: var(--bad); }
+  .note {
+    margin-top: 0.6rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .summary {
+    max-width: 1400px;
+    margin: 0 auto 1.5rem;
+    background: linear-gradient(135deg, rgba(94,200,248,0.12), rgba(94,200,248,0.02));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+  }
+  .summary h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    color: var(--text);
+  }
+  .summary ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  .footer-note {
+    max-width: 1400px;
+    margin: 2rem auto 0;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  canvas { display: none; }
+</style>
+</head>
+<body>
+  <h1>What can a browser page learn about this machine?</h1>
+  <p class="subtitle">
+    This page runs entirely client-side — it makes no network requests at all. Everything below comes
+    from standard browser APIs (Navigator, Screen, WebGL2, WebGPU) evaluated live in your browser, right now.
+  </p>
+
+  <div class="summary" id="summary">
+    <h2>Best guess</h2>
+    <ul id="summary-list"><li>Running probes…</li></ul>
+  </div>
+
+  <div class="grid">
+
+    <section class="card">
+      <h2>Operating System</h2>
+      <table id="os-table"></table>
+      <div class="note">Derived from <code>navigator.userAgentData</code> (Client Hints, Chromium only) and/or
+        <code>navigator.userAgent</code>/<code>platform</code> parsing. Modern Chrome intentionally "freezes" and
+        generalizes the UA string (e.g. reports "Windows NT 10.0" for all Win10/11), so exact OS version is
+        increasingly unavailable to scripts by design.</div>
+    </section>
+
+    <section class="card">
+      <h2>Device</h2>
+      <table id="device-table"></table>
+      <div class="note">Device type is inferred from touch support, screen size and UA hints — there is no
+        direct "give me the model name" API for privacy reasons.</div>
+    </section>
+
+    <section class="card">
+      <h2>Memory &amp; CPU</h2>
+      <table id="mem-table"></table>
+      <div class="note"><code>navigator.deviceMemory</code> (Chromium only) reports RAM in coarse buckets
+        (0.25–8, capped at "8" even if you have far more) specifically to limit fingerprinting.
+        <code>hardwareConcurrency</code> is logical CPU threads, not physical cores, and Safari caps it.</div>
+    </section>
+
+    <section class="card">
+      <h2>Display</h2>
+      <table id="display-table"></table>
+    </section>
+
+    <section class="card">
+      <h2>WebGL2 → GPU report</h2>
+      <table id="webgl-table"></table>
+      <div class="note">The unmasked renderer/vendor strings (via <code>WEBGL_debug_renderer_info</code>) are the
+        most reliable way to identify the actual GPU from a browser. Firefox and Safari partially mask this by
+        default in some configurations; Chrome usually exposes it.</div>
+    </section>
+
+    <section class="card">
+      <h2>WebGPU → Adapter report</h2>
+      <table id="webgpu-table"></table>
+      <div class="note">WebGPU's <code>requestAdapterInfo</code>/adapter <code>info</code> can expose vendor,
+        architecture and device strings on some browsers/flags; many ship it blank or omitted for privacy.</div>
+    </section>
+
+    <section class="card">
+      <h2>Browser / Engine</h2>
+      <table id="browser-table"></table>
+    </section>
+
+    <section class="card">
+      <h2>Raw navigator.userAgent</h2>
+      <table id="ua-table"></table>
+    </section>
+
+  </div>
+
+  <p class="footer-note">
+    Generated fully client-side, no external requests. Open this file's source (view-source:) to see exactly what
+    it does — every value below is read from a browser API, nothing is sent anywhere.
+  </p>
+
+<script>
+(function () {
+  "use strict";
+
+  function row(k, v) {
+    const tr = document.createElement("tr");
+    const tk = document.createElement("td");
+    tk.className = "k";
+    tk.textContent = k;
+    const tv = document.createElement("td");
+    tv.className = "v";
+    if (v instanceof Node) {
+      tv.appendChild(v);
+    } else {
+      tv.textContent = (v === undefined || v === null || v === "") ? "— unavailable —" : String(v);
+    }
+    tr.appendChild(tk);
+    tr.appendChild(tv);
+    return tr;
+  }
+
+  function pill(text, kind) {
+    const span = document.createElement("span");
+    span.className = "pill " + kind;
+    span.textContent = text;
+    return span;
+  }
+
+  function fillTable(id, rows) {
+    const table = document.getElementById(id);
+    rows.forEach(r => table.appendChild(row(r[0], r[1])));
+  }
+
+  const summaryPoints = [];
+
+  // ---------- User-Agent Client Hints (async, Chromium) ----------
+  async function getUAData() {
+    const uad = navigator.userAgentData;
+    if (!uad) return null;
+    let high = null;
+    try {
+      high = await uad.getHighEntropyValues([
+        "platform", "platformVersion", "architecture", "bitness", "model",
+        "uaFullVersion", "fullVersionList", "wow64"
+      ]);
+    } catch (e) { /* ignore */ }
+    return { low: uad, high };
+  }
+
+  // ---------- OS detection ----------
+  function guessOSFromUA(ua, platform) {
+    const table = [
+      [/Windows NT 10\.0/, "Windows 10/11"],
+      [/Windows NT 6\.3/, "Windows 8.1"],
+      [/Windows NT 6\.1/, "Windows 7"],
+      [/Windows/, "Windows (other)"],
+      [/Mac OS X 10[_.]15/, "macOS Catalina+"],
+      [/Mac OS X/, "macOS"],
+      [/CrOS/, "ChromeOS"],
+      [/Android/, "Android"],
+      [/iPhone|iPad|iPod/, "iOS / iPadOS"],
+      [/Linux/, "Linux"],
+    ];
+    for (const [re, name] of table) {
+      if (re.test(ua) || re.test(platform || "")) return name;
+    }
+    return "Unknown";
+  }
+
+  // ---------- Device type ----------
+  function guessDeviceType() {
+    const ua = navigator.userAgent;
+    const touch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && touch)) return "Tablet (iPad-class)";
+    if (/iPhone|iPod/.test(ua)) return "Phone";
+    if (/Android/.test(ua)) {
+      return /Mobile/.test(ua) ? "Phone" : "Tablet";
+    }
+    if (touch && Math.min(screen.width, screen.height) < 900) return "Tablet (touch, small screen)";
+    return "Desktop / Laptop";
+  }
+
+  // ---------- WebGL2 GPU probe ----------
+  function probeWebGL() {
+    const out = {};
+    try {
+      const canvas = document.createElement("canvas");
+      const gl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (!gl) {
+        out.supported = false;
+        return out;
+      }
+      out.supported = true;
+      out.contextType = canvas.getContext("webgl2") ? "webgl2" : "webgl";
+      out.vendor = gl.getParameter(gl.VENDOR);
+      out.renderer = gl.getParameter(gl.RENDERER);
+      out.version = gl.getParameter(gl.VERSION);
+      out.shadingLanguageVersion = gl.getParameter(gl.SHADING_LANGUAGE_VERSION);
+
+      const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+      if (dbg) {
+        out.unmaskedVendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+        out.unmaskedRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+      } else {
+        out.unmaskedVendor = null;
+        out.unmaskedRenderer = null;
+      }
+
+      out.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      out.maxViewportDims = Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS)).join(" x ");
+      out.maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+      out.maxCombinedTextureUnits = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+      out.extensions = gl.getSupportedExtensions();
+    } catch (e) {
+      out.error = e.message;
+    }
+    return out;
+  }
+
+  // ---------- WebGPU adapter probe ----------
+  async function probeWebGPU() {
+    const out = {};
+    if (!("gpu" in navigator)) {
+      out.supported = false;
+      return out;
+    }
+    out.supported = true;
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) {
+        out.adapterAvailable = false;
+        return out;
+      }
+      out.adapterAvailable = true;
+
+      if (adapter.info) {
+        out.vendor = adapter.info.vendor || null;
+        out.architecture = adapter.info.architecture || null;
+        out.device = adapter.info.device || null;
+        out.description = adapter.info.description || null;
+      } else if (adapter.requestAdapterInfo) {
+        try {
+          const info = await adapter.requestAdapterInfo();
+          out.vendor = info.vendor || null;
+          out.architecture = info.architecture || null;
+          out.device = info.device || null;
+          out.description = info.description || null;
+        } catch (e) { /* ignore */ }
+      }
+
+      const feats = [];
+      if (adapter.features) adapter.features.forEach(f => feats.push(f));
+      out.features = feats;
+
+      if (adapter.limits) {
+        out.maxTextureDimension2D = adapter.limits.maxTextureDimension2D;
+        out.maxBufferSize = adapter.limits.maxBufferSize;
+        out.maxComputeWorkgroupsPerDimension = adapter.limits.maxComputeWorkgroupsPerDimension;
+      }
+
+      out.isFallbackAdapter = adapter.isFallbackAdapter;
+    } catch (e) {
+      out.error = e.message;
+    }
+    return out;
+  }
+
+  function bytesToGiB(mb) {
+    if (mb === undefined || mb === null) return null;
+    return mb; // deviceMemory is already in GiB (coarse)
+  }
+
+  async function main() {
+    const ua = navigator.userAgent;
+    const platform = navigator.platform;
+    const uaDataResult = await getUAData();
+
+    // ---- OS ----
+    const osRows = [];
+    let osName = guessOSFromUA(ua, platform);
+    let osVersion = "unknown (frozen/limited by browser)";
+    let osArch = null;
+
+    if (uaDataResult && uaDataResult.low) {
+      const { low, high } = uaDataResult;
+      osRows.push(["UA-CH platform", low.platform]);
+      osRows.push(["UA-CH mobile", String(low.mobile)]);
+      if (high) {
+        if (high.platformVersion) osRows.push(["UA-CH platformVersion (raw)", high.platformVersion]);
+        if (high.architecture) { osRows.push(["UA-CH architecture", high.architecture]); osArch = high.architecture; }
+        if (high.bitness) osRows.push(["UA-CH bitness", high.bitness]);
+        if (high.wow64 !== undefined) osRows.push(["UA-CH wow64", String(high.wow64)]);
+        osName = low.platform || osName;
+        osVersion = high.platformVersion || osVersion;
+      }
+    } else {
+      osRows.push(["Client Hints API", "not available in this browser (Safari/Firefox omit it)"]);
+    }
+    osRows.unshift(["Best-guess OS", osName]);
+    osRows.splice(1, 0, ["Reported version hint", osVersion]);
+    osRows.push(["navigator.platform (legacy)", platform]);
+    osRows.push(["navigator.oscpu (Firefox only)", navigator.oscpu]);
+    fillTable("os-table", osRows);
+    summaryPoints.push(`OS: <b>${osName}</b>${osVersion && osVersion !== "unknown (frozen/limited by browser)" ? " " + osVersion : " (exact version hidden by browser)"}`);
+
+    // ---- Device ----
+    const deviceType = guessDeviceType();
+    const deviceRows = [
+      ["Best-guess device type", deviceType],
+      ["Touch points (navigator.maxTouchPoints)", navigator.maxTouchPoints],
+      ["Pointer: coarse (touch-like)?", window.matchMedia("(pointer: coarse)").matches ? "yes" : "no"],
+      ["Pointer: fine (mouse/trackpad)?", window.matchMedia("(pointer: fine)").matches ? "yes" : "no"],
+      ["Hover capable?", window.matchMedia("(hover: hover)").matches ? "yes" : "no"],
+      ["UA-CH model (if given)", uaDataResult && uaDataResult.high ? uaDataResult.high.model : null],
+      ["navigator.vendor", navigator.vendor],
+    ];
+    fillTable("device-table", deviceRows);
+    summaryPoints.push(`Device type: <b>${deviceType}</b>`);
+
+    // ---- Memory & CPU ----
+    const dm = navigator.deviceMemory;
+    const cores = navigator.hardwareConcurrency;
+    const memRows = [
+      ["navigator.deviceMemory (RAM, GiB, coarse & capped at 8)", dm !== undefined ? dm + " GB" : null],
+      ["navigator.hardwareConcurrency (logical CPU threads)", cores],
+      ["CPU architecture (UA-CH, Chromium only)", osArch],
+      ["Battery API", "removed from spec / not exposed for fingerprinting reasons in most browsers"],
+    ];
+    fillTable("mem-table", memRows);
+    if (dm !== undefined) {
+      summaryPoints.push(`RAM: <b>~${dm} GB</b> reported ${dm >= 8 ? "(likely 8 GB or more — Chrome caps this value at 8)" : ""}`);
+    } else {
+      summaryPoints.push("RAM: not reported by this browser");
+    }
+    if (cores !== undefined) {
+      summaryPoints.push(`CPU: <b>${cores} logical threads</b> reported (not physical core count, and GPU/CPU model name is never exposed directly)`);
+    }
+
+    // ---- Display ----
+    const displayRows = [
+      ["Screen resolution", `${screen.width} x ${screen.height}`],
+      ["Available screen area", `${screen.availWidth} x ${screen.availHeight}`],
+      ["Device pixel ratio", window.devicePixelRatio],
+      ["Color depth", screen.colorDepth + "-bit"],
+      ["Orientation", screen.orientation ? screen.orientation.type : null],
+      ["Multiple monitors (best guess)", (window.screen.isExtended !== undefined) ? String(window.screen.isExtended) : "unknown (Screen.isExtended not supported)"],
+      ["Prefers color scheme", window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"],
+      ["Prefers reduced motion", window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "yes" : "no"],
+    ];
+    fillTable("display-table", displayRows);
+    summaryPoints.push(`Screen: <b>${screen.width}x${screen.height}</b> @ ${window.devicePixelRatio}x pixel ratio`);
+
+    // ---- WebGL ----
+    const gl = probeWebGL();
+    const glRows = [];
+    if (!gl.supported) {
+      glRows.push(["WebGL support", pill("not supported", "bad")]);
+    } else {
+      glRows.push(["Context", gl.contextType]);
+      glRows.push(["Unmasked GPU renderer", gl.unmaskedRenderer || "(masked by browser)"]);
+      glRows.push(["Unmasked GPU vendor", gl.unmaskedVendor || "(masked by browser)"]);
+      glRows.push(["Reported VENDOR", gl.vendor]);
+      glRows.push(["Reported RENDERER", gl.renderer]);
+      glRows.push(["GL version string", gl.version]);
+      glRows.push(["GLSL version", gl.shadingLanguageVersion]);
+      glRows.push(["Max texture size", gl.maxTextureSize]);
+      glRows.push(["Max viewport dims", gl.maxViewportDims]);
+      glRows.push(["Max renderbuffer size", gl.maxRenderbufferSize]);
+      glRows.push(["Extension count", gl.extensions ? gl.extensions.length : 0]);
+    }
+    fillTable("webgl-table", glRows);
+    if (gl.supported) {
+      const gpuGuess = gl.unmaskedRenderer || gl.renderer || "unknown";
+      summaryPoints.push(`GPU (via WebGL): <b>${gpuGuess}</b>`);
+    } else {
+      summaryPoints.push("GPU: WebGL not available to identify GPU");
+    }
+
+    // ---- WebGPU ----
+    const wgpu = await probeWebGPU();
+    const wgpuRows = [];
+    if (!wgpu.supported) {
+      wgpuRows.push(["navigator.gpu", pill("not supported in this browser", "bad")]);
+    } else if (wgpu.adapterAvailable === false) {
+      wgpuRows.push(["navigator.gpu", pill("supported", "ok")]);
+      wgpuRows.push(["requestAdapter()", pill("returned null (no GPU adapter found)", "warn")]);
+    } else {
+      wgpuRows.push(["navigator.gpu", pill("supported", "ok")]);
+      wgpuRows.push(["Adapter vendor", wgpu.vendor || "(not exposed)"]);
+      wgpuRows.push(["Adapter architecture", wgpu.architecture || "(not exposed)"]);
+      wgpuRows.push(["Adapter device", wgpu.device || "(not exposed)"]);
+      wgpuRows.push(["Adapter description", wgpu.description || "(not exposed)"]);
+      wgpuRows.push(["Is fallback (software) adapter", String(wgpu.isFallbackAdapter)]);
+      wgpuRows.push(["Max texture dimension 2D", wgpu.maxTextureDimension2D]);
+      wgpuRows.push(["Max buffer size", wgpu.maxBufferSize]);
+      wgpuRows.push(["Feature count", wgpu.features ? wgpu.features.length : 0]);
+    }
+    fillTable("webgpu-table", wgpuRows);
+    if (wgpu.supported && wgpu.adapterAvailable) {
+      const wgpuGuess = wgpu.description || wgpu.device || wgpu.vendor;
+      if (wgpuGuess) {
+        summaryPoints.push(`GPU (via WebGPU adapter info): <b>${wgpuGuess}</b>`);
+      } else {
+        summaryPoints.push("GPU (via WebGPU): adapter found but vendor/device strings not exposed by this browser");
+      }
+      if (wgpu.isFallbackAdapter) {
+        summaryPoints.push(pill("Warning: WebGPU is using a software fallback adapter, not real GPU hardware", "warn").outerHTML);
+      }
+    } else if (wgpu.supported) {
+      summaryPoints.push("GPU (via WebGPU): browser supports the API but found no adapter");
+    }
+
+    // ---- Browser / engine ----
+    const browserRows = [
+      ["navigator.vendor", navigator.vendor],
+      ["navigator.product", navigator.product],
+      ["navigator.language", navigator.language],
+      ["navigator.languages", (navigator.languages || []).join(", ")],
+      ["navigator.cookieEnabled", String(navigator.cookieEnabled)],
+      ["navigator.pdfViewerEnabled", navigator.pdfViewerEnabled],
+      ["navigator.webdriver (automation flag)", String(navigator.webdriver)],
+      ["UA-CH brands", uaDataResult && uaDataResult.low ? uaDataResult.low.brands.map(b => `${b.brand} ${b.version}`).join(", ") : null],
+    ];
+    fillTable("browser-table", browserRows);
+
+    // ---- Raw UA ----
+    fillTable("ua-table", [
+      ["navigator.userAgent", ua],
+      ["navigator.appVersion", navigator.appVersion],
+    ]);
+
+    // ---- Summary ----
+    const summaryList = document.getElementById("summary-list");
+    summaryList.innerHTML = "";
+    summaryPoints.forEach(p => {
+      const li = document.createElement("li");
+      li.innerHTML = p;
+      summaryList.appendChild(li);
+    });
+  }
+
+  main().catch(err => {
+    const summaryList = document.getElementById("summary-list");
+    summaryList.innerHTML = `<li style="color:var(--bad)">Error while probing: ${err.message}</li>`;
+    console.error(err);
+  });
+})();
+</script>
+</body>
+</html>

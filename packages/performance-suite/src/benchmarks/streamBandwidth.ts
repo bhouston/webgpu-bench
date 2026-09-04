@@ -19,7 +19,7 @@ export async function benchmarkReadBandwidth(
 ): Promise<BenchmarkResult> {
   const { device } = ctx;
   const cols4 = data.cols / 4;
-  const pipeline = createPipeline(device, 'stream-read', streamReadWgsl);
+  const pipeline = await createPipeline(device, 'stream-read', streamReadWgsl);
   const paramsBuf = createUniformBuffer(device, new Uint32Array([data.rows, cols4]), 'params');
   const dataBuf = createStorageBuffer(device, data.matrix, 'data');
   const outBuf = createEmptyStorageBuffer(device, data.rows * 4, 'out');
@@ -40,9 +40,9 @@ export async function benchmarkReadBandwidth(
     ctx,
     rows: data.rows,
     cols: data.cols,
-    bytesPerOp: data.matrix.byteLength,
+    bytes: data.matrix.byteLength,
     // One add per element read — negligible compute, reported for completeness.
-    flopsOverride: data.rows * data.cols,
+    flops: data.rows * data.cols,
     workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
     pipeline,
     bindGroup,
@@ -62,7 +62,7 @@ export async function benchmarkWriteBandwidth(
 ): Promise<BenchmarkResult> {
   const { device } = ctx;
   const cols4 = data.cols / 4;
-  const pipeline = createPipeline(device, 'stream-write', streamWriteWgsl);
+  const pipeline = await createPipeline(device, 'stream-write', streamWriteWgsl);
   const paramsBuf = createUniformBuffer(device, new Uint32Array([data.rows, cols4]), 'params');
   const outBuf = createEmptyStorageBuffer(device, data.matrix.byteLength, 'out');
   const bindGroup = device.createBindGroup({
@@ -81,9 +81,9 @@ export async function benchmarkWriteBandwidth(
     ctx,
     rows: data.rows,
     cols: data.cols,
-    bytesPerOp: data.matrix.byteLength,
+    bytes: data.matrix.byteLength,
     // No arithmetic beyond forming the value to store.
-    flopsOverride: 0,
+    flops: 0,
     workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
     pipeline,
     bindGroup,
