@@ -1,0 +1,18 @@
+name: Deploy webgpu-profiler to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy website to Cloud Run
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service_name: webgpu-profiler
+      dockerfile: packages/website/Dockerfile
+      context: .
+      env_vars: 'PORT=3500'
+    secrets:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}

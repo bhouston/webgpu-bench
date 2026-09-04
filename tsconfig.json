@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "composite": true },
+  "files": [],
+  "include": [],
+  "references": [{ "path": "./packages/performance-suite" }, { "path": "./packages/website" }]
+}

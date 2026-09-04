@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["**/routeTree.gen.ts"],
+  "categories": { "correctness": "error", "suspicious": "warn" },
+  "plugins": ["eslint", "typescript", "oxc", "unicorn", "react", "jsx-a11y"],
+  "rules": {
+    "eslint/no-underscore-dangle": "off",
+    "react/react-in-jsx-scope": "off"
+  }
+}

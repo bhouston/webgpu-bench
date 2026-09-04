@@ -1,0 +1,43 @@
+import type { GpuContext } from '../gpu/context.ts';
+import type { GeneratedData } from '../data/generate.ts';
+import { createUniformBuffer, createStorageBuffer, createEmptyStorageBuffer } from '../gpu/buffers.ts';
+import { createPipeline, runKernelBenchmark, type HarnessConfig } from './common.ts';
+import { matvecF32ScalarWgsl } from '../shaders/matvecF32Scalar.ts';
+import type { BenchmarkResult } from '../types.ts';
+
+export async function benchmarkF32Scalar(
+  ctx: GpuContext,
+  data: GeneratedData,
+  harness: HarnessConfig = {},
+): Promise<BenchmarkResult> {
+  const { device } = ctx;
+  const pipeline = createPipeline(device, 'matvec-f32-scalar', matvecF32ScalarWgsl);
+  const paramsBuf = createUniformBuffer(device, new Uint32Array([data.rows, data.cols]), 'params');
+  const matrixBuf = createStorageBuffer(device, data.matrix, 'matrix');
+  const vectorBuf = createStorageBuffer(device, data.vector, 'vector');
+  const outBuf = createEmptyStorageBuffer(device, data.rows * 4, 'out');
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: paramsBuf } },
+      { binding: 1, resource: { buffer: matrixBuf } },
+      { binding: 2, resource: { buffer: vectorBuf } },
+      { binding: 3, resource: { buffer: outBuf } },
+    ],
+  });
+
+  return runKernelBenchmark({
+    id: 'f32-scalar',
+    label: 'f32 scalar (baseline)',
+    description: 'One thread per output row; plain scalar dot-product loop over f32 storage buffers.',
+    category: 'dtype',
+    ctx,
+    rows: data.rows,
+    cols: data.cols,
+    bytesPerOp: data.matrix.byteLength + data.vector.byteLength,
+    workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
+    pipeline,
+    bindGroup,
+    ...harness,
+  });
+}

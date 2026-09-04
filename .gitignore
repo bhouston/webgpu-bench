@@ -1,0 +1,11 @@
+.git
+node_modules
+dist
+build
+.output
+.nitro
+.tanstack
+coverage
+*.tsbuildinfo
+.env
+.DS_Store
