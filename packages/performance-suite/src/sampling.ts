@@ -72,7 +72,52 @@ export interface RunSamplingOptions extends SamplingConfig {
 
 const isActive = (s: SampleState) => s.stopReason === undefined && s.error === undefined;
 
-const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/**
+ * The idle gap doubles as the UI's render window: after the timer, wait for
+ * the main thread to go idle (table re-render committed, its paint queued)
+ * so the compositor's GPU work lands here rather than inside the next
+ * measurement. Falls back to a plain timer where `requestIdleCallback` is
+ * missing; the timeout bounds the wait on a busy page.
+ */
+const realSleep = (ms: number) =>
+  new Promise<void>((resolve) =>
+    setTimeout(() => {
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(() => resolve(), { timeout: 1000 });
+      else resolve();
+    }, ms),
+  );
+
+/**
+ * A backgrounded tab gets a throttled event loop and a lower-priority GPU
+ * queue, so nothing measured while hidden is a property of the device.
+ * `waitVisible` blocks until the page is showing; `hiddenSince` reports
+ * whether it went hidden at any point after the last `mark()`.
+ */
+function visibilityGuard() {
+  const doc = typeof document === 'undefined' ? undefined : document;
+  let hidden = false;
+  const onChange = () => {
+    if (doc?.hidden) hidden = true;
+  };
+  doc?.addEventListener('visibilitychange', onChange);
+  return {
+    mark: () => {
+      hidden = Boolean(doc?.hidden);
+    },
+    hiddenSince: () => hidden || Boolean(doc?.hidden),
+    waitVisible: () =>
+      new Promise<void>((resolve) => {
+        if (!doc?.hidden) return resolve();
+        const onVisible = () => {
+          if (doc.hidden) return;
+          doc.removeEventListener('visibilitychange', onVisible);
+          resolve();
+        };
+        doc.addEventListener('visibilitychange', onVisible);
+      }),
+    dispose: () => doc?.removeEventListener('visibilitychange', onChange),
+  };
+}
 
 /**
  * Classifies one measurement against the benchmark's best-so-far and folds it
@@ -121,6 +166,15 @@ export function roundIsThrottled(roundThrottled: readonly boolean[], cfg: Requir
   return throttledCount >= 2 && throttledCount / roundThrottled.length >= cfg.throttledFraction;
 }
 
+/** In-place Fisher-Yates. */
+function shuffle<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j]!, items[i]!];
+  }
+  return items;
+}
+
 function snapshot(state: SampleState): SampleStateSnapshot {
   return {
     ...state,
@@ -164,63 +218,76 @@ export async function runSampling(
     states.set(b.id, { id: b.id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY });
     samplers.set(b.id, b);
   }
+  const visibility = visibilityGuard();
   let cooldowns = 0;
   let calibrated = false;
-  for (let round = 1; ; round++) {
-    const active = [...states.values()].filter(isActive);
-    if (active.length === 0) break;
-    onProgress({ type: 'round', round, active: active.length });
+  try {
+    for (let round = 1; ; round++) {
+      // Fresh order every round: a fixed order would hand the same kernels
+      // the cool GPU every time and leave the rest measuring a warm one.
+      const active = shuffle([...states.values()].filter(isActive));
+      if (active.length === 0) break;
+      onProgress({ type: 'round', round, active: active.length });
 
-    const roundStates: SampleState[] = [];
-    const roundThrottled: boolean[] = [];
-    let first = true;
-    for (const state of active) {
-      const sampler = samplers.get(state.id)!;
-      try {
-        if (!first && cfg.idleMs > 0) await sleep(cfg.idleMs);
-        first = false;
-        if (!calibrated) await sampler.calibrate();
-        const ms = await sampler.sample();
-        if (!Number.isFinite(ms) || ms <= 0) {
-          throw new Error(
-            `measured a per-op time of ${ms}ms — the GPU pass likely did no work (check for an 'uncapturederror' in the console).`,
-          );
-        }
-        const kept = recordSample(state, ms, cfg);
-        roundStates.push(state);
-        roundThrottled.push(!kept);
-      } catch (error) {
-        state.error = error;
-      }
-      await onUpdate(snapshot(state));
-    }
-    calibrated = true;
-
-    if (roundStates.length > 0 && roundIsThrottled(roundThrottled, cfg)) {
-      const throttledIds = roundStates.filter((_, i) => roundThrottled[i]).map((s) => s.id);
-      if (cooldowns >= cfg.maxCooldowns) {
-        onProgress({ type: 'throttle-abort', throttledIds });
-        for (const s of states.values()) {
-          if (isActive(s)) {
-            s.stopReason = s.timesMs.length > 0 ? 'throttled' : undefined;
-            if (s.timesMs.length === 0) {
-              s.error = new Error('Every measurement was discarded as throttled and the cooldown budget is exhausted.');
-            }
-            await onUpdate(snapshot(s));
+      const roundStates: SampleState[] = [];
+      const roundThrottled: boolean[] = [];
+      let first = true;
+      for (const state of active) {
+        const sampler = samplers.get(state.id)!;
+        try {
+          if (!first && cfg.idleMs > 0) await sleep(cfg.idleMs);
+          first = false;
+          await visibility.waitVisible();
+          visibility.mark();
+          if (!calibrated) await sampler.calibrate();
+          const ms = await sampler.sample();
+          // Hidden at any point during the measurement: not a device number. Drop it and retry next round.
+          if (visibility.hiddenSince()) continue;
+          if (!Number.isFinite(ms) || ms <= 0) {
+            throw new Error(
+              `measured a per-op time of ${ms}ms — the GPU pass likely did no work (check for an 'uncapturederror' in the console).`,
+            );
           }
+          const kept = recordSample(state, ms, cfg);
+          roundStates.push(state);
+          roundThrottled.push(!kept);
+        } catch (error) {
+          state.error = error;
         }
-        break;
+        await onUpdate(snapshot(state));
       }
-      cooldowns += 1;
-      onProgress({
-        type: 'cooldown',
-        attempt: cooldowns,
-        maxAttempts: cfg.maxCooldowns,
-        ms: cfg.cooldownMs,
-        throttledIds,
-      });
-      await sleep(cfg.cooldownMs);
+      calibrated = true;
+
+      if (roundStates.length > 0 && roundIsThrottled(roundThrottled, cfg)) {
+        const throttledIds = roundStates.filter((_, i) => roundThrottled[i]).map((s) => s.id);
+        if (cooldowns >= cfg.maxCooldowns) {
+          onProgress({ type: 'throttle-abort', throttledIds });
+          for (const s of states.values()) {
+            if (isActive(s)) {
+              s.stopReason = s.timesMs.length > 0 ? 'throttled' : undefined;
+              if (s.timesMs.length === 0) {
+                s.error = new Error(
+                  'Every measurement was discarded as throttled and the cooldown budget is exhausted.',
+                );
+              }
+              await onUpdate(snapshot(s));
+            }
+          }
+          break;
+        }
+        cooldowns += 1;
+        onProgress({
+          type: 'cooldown',
+          attempt: cooldowns,
+          maxAttempts: cfg.maxCooldowns,
+          ms: cfg.cooldownMs,
+          throttledIds,
+        });
+        await sleep(cfg.cooldownMs);
+      }
     }
+  } finally {
+    visibility.dispose();
   }
 
   return new Map([...states].map(([id, s]) => [id, snapshot(s)]));

@@ -1,9 +1,9 @@
 import { humanizeUnit } from 'humanize-units';
 import { Info } from 'lucide-react';
-import { useRef } from 'react';
 
 import type { BenchmarkResult } from '@webgpu-profiler/performance-suite';
 
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 function formatThroughput(value: number | undefined, unit: string): string {
@@ -53,35 +53,29 @@ function MetricCell({ r }: { r: BenchmarkResult }) {
   );
 }
 
-/** (i) button that pops up the benchmark's description and WGSL source in a native modal dialog. */
+/** (i) button that pops up the benchmark's description and WGSL source in a shadcn dialog. */
 function KernelInfoButton({ r }: { r: BenchmarkResult }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   return (
-    <>
-      <button
-        type="button"
-        aria-label={`About ${displayName(r.label)}`}
-        className="text-muted-foreground hover:text-foreground"
-        onClick={() => dialogRef.current?.showModal()}
-      >
-        <Info className="size-4" />
-      </button>
-      <dialog
-        ref={dialogRef}
-        className="max-w-2xl rounded-md border bg-popover p-4 text-popover-foreground backdrop:bg-black/50"
-        onClick={(e) => {
-          if (e.target === dialogRef.current) dialogRef.current?.close();
-        }}
-      >
-        <h3 className="mb-1 font-medium">{displayName(r.label)}</h3>
-        {r.description ? <p className="mb-3 text-sm text-muted-foreground">{r.description}</p> : null}
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={`About ${displayName(r.label)}`}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <Info className="size-4" />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogTitle>{displayName(r.label)}</DialogTitle>
+        {r.description ? <DialogDescription className="break-words whitespace-pre-wrap">{r.description}</DialogDescription> : null}
         {r.source ? (
           <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs">
             <code>{r.source.trim()}</code>
           </pre>
         ) : null}
-      </dialog>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
 

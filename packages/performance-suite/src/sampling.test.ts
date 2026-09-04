@@ -84,16 +84,13 @@ describe('runSampling', () => {
     const a = scripted('a', [10, 10, 10], log);
     const b = scripted('b', [20, 20, 20], log);
     const results = await runSampling([a, b], { idleMs: 0 });
-    expect(log).toEqual([
-      'a:calibrate',
-      'a:sample',
-      'b:calibrate',
-      'b:sample',
-      'a:sample',
-      'b:sample',
-      'a:sample',
-      'b:sample',
-    ]);
+    expect(log.filter((e) => e.endsWith(':calibrate'))).toHaveLength(2);
+    // Every round measures both once; the order within a round is random.
+    const samples = log.filter((e) => e.endsWith(':sample'));
+    expect(samples).toHaveLength(6);
+    for (let i = 0; i < samples.length; i += 2) {
+      expect(new Set(samples.slice(i, i + 2))).toEqual(new Set(['a:sample', 'b:sample']));
+    }
     expect(results.get('a')!.stopReason).toBe('converged');
     expect(results.get('a')!.stats!.min).toBe(10);
     expect(results.get('b')!.timesMs).toEqual([20, 20, 20]);

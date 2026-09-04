@@ -55,7 +55,7 @@ order. Instead the suite:
    default (256–1024). A desktop lands near the cap; a phone lands on a much smaller count; neither
    ever runs a dispatch longer than a few tens of ms, even during calibration. `computeIterations`
    pins the count and disables this.
-3. **Samples round-robin.** Each round takes one short timed measurement (~100ms, `targetMs`: a batch
+3. **Samples round-robin, in a fresh random order each round.** Each round takes one short timed measurement (~100ms, `targetMs`: a batch
    of those ~10ms dispatches in one command buffer) of every still-active kernel, with an idle gap
    (`idleMs`, 100ms) between measurements so the GPU duty-cycles instead of running flat out. The
    calibration probes double as warm-up; one further discarded warmup measurement (`warmups`) follows.
@@ -79,11 +79,16 @@ order. Instead the suite:
 `onProgress` reports round boundaries and cooldowns; all of the knobs above are `SuiteOptions`.
 GPU timing uses `timestamp-query` when available (pure device-side time, no CPU/driver overhead);
 otherwise it falls back to wall-clock around `queue.onSubmittedWorkDone()`. "Available" is checked, not
-trusted: every timestamp reading is compared with wall clock and a kernel is demoted to wall-clock
-timing the first time the GPU reading is under a third of it. Safari needs this — outside a
-cross-origin-isolated context its timestamps are quantized to the point of reporting ~1ms for a 70ms
-batch — and all batch sizing uses wall clock regardless, since a batch sized from a bogus timestamp is
-a multi-second command buffer that hangs the GPU process. Mean / median / stddev /
+trusted: every timestamp reading is compared with wall clock (minus the fixed submit/readback overhead,
+measured with empty submits at calibration) and a kernel is demoted to wall-clock timing once the GPU
+reading comes in under half of that twice running. Safari needs this — outside a cross-origin-isolated
+context its timestamps are quantized to the point of reporting ~1ms for a 70ms batch — and all batch
+sizing uses wall clock regardless, since a batch sized from a bogus timestamp is a multi-second command
+buffer that hangs the GPU process. Two further hygiene rules: a measurement during which the tab was
+hidden is dropped (background tabs get a throttled event loop and a lower-priority GPU queue) and the
+suite waits for the page to be visible again; and the idle gap between measurements ends on
+`requestIdleCallback`, so the results table's re-render and the compositor frame it triggers land in the
+gap rather than inside the next measurement. Mean / median / stddev /
 ci95 over the kept runs are still in `BenchmarkResult.stats` if you want a sustained number — the
 table just shows the best.
 

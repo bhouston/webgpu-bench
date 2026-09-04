@@ -55,15 +55,21 @@ export interface KernelHarness extends MeasurementConfig {
 const MAX_PROBE_GROWTH = 4;
 
 /**
- * GPU timestamps are cross-checked against wall clock during calibration.
- * Wall clock is an upper bound on GPU time (it includes submit and readback
- * overhead), but a GPU reading under a third of a wall reading this long is
- * a broken timer, not overhead. Safari's `timestamp-query` does exactly this
- * — reporting ~1ms for a ~70ms batch — and trusting it makes calibration
- * batch ~70x too much work into one command buffer, which hangs the browser.
+ * GPU timestamps are cross-checked against wall clock on every measurement.
+ * Wall clock minus the measured fixed submit/readback overhead is what the
+ * GPU actually spent, so a GPU reading under half of that is a broken timer.
+ * Safari's `timestamp-query` does exactly this — reporting ~1ms for a ~70ms
+ * batch — and trusting it makes calibration batch ~70x too much work into
+ * one command buffer, which hangs the browser. Two consecutive failures are
+ * required before demoting for good, so a one-off main-thread stall that
+ * inflates wall time (GC, a compositor frame) can't cost a kernel its
+ * accurate timer.
  */
-const TIMESTAMP_CHECK_MIN_WALL_MS = 4;
-const TIMESTAMP_MAX_UNDERREPORT = 3;
+const TIMESTAMP_CHECK_MIN_GPU_MS = 4;
+const TIMESTAMP_MAX_UNDERREPORT = 2;
+const TIMESTAMP_STRIKES_TO_DEMOTE = 2;
+/** Empty submits measured at calibration to estimate the fixed per-measurement overhead. */
+const OVERHEAD_PROBES = 3;
 
 /**
  * Takes individual timed measurements of one kernel on demand, so a
@@ -78,8 +84,11 @@ export class KernelSampler {
   private readonly timer: GpuTimer;
   private iterations = 0;
   private currentWork: number | undefined;
-  /** Cleared if calibration catches the GPU timestamps disagreeing with wall clock. */
+  /** Cleared once the GPU timestamps have disagreed with wall clock `TIMESTAMP_STRIKES_TO_DEMOTE` times running. */
   private trustTimestamps: boolean;
+  private timestampStrikes = 0;
+  /** Wall time of an empty submit (min of `OVERHEAD_PROBES`): submit, scheduling and readback, no GPU work. */
+  private overheadMs = 0;
 
   constructor(private readonly h: KernelHarness) {
     this.timer = new GpuTimer(h.device, h.useTimestamps);
@@ -122,6 +131,11 @@ export class KernelSampler {
     const targetDispatchMs = this.h.targetDispatchMs ?? DEFAULT_MEASUREMENT.targetDispatchMs;
     const warmups = this.h.warmups ?? DEFAULT_MEASUREMENT.warmups;
     const maxIterations = this.h.maxIterations ?? DEFAULT_MEASUREMENT.maxIterations;
+
+    this.overheadMs = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < OVERHEAD_PROBES; i++) {
+      this.overheadMs = Math.min(this.overheadMs, (await this.measureRaw(0)).wallMs);
+    }
 
     const knob = this.h.work;
     if (knob) {
@@ -182,8 +196,9 @@ export class KernelSampler {
   /**
    * Submits `iterations` dispatches as one command buffer and waits for
    * them. Always returns the wall-clock time; returns the GPU-timestamp
-   * time too while the timestamps are trusted, demoting the sampler to
-   * wall-clock for good the first time a reading is implausibly small.
+   * time too while the timestamps are trusted. An implausibly small reading
+   * (see `TIMESTAMP_MAX_UNDERREPORT`) is replaced by wall clock, and the
+   * sampler is demoted to wall-clock for good on the second in a row.
    */
   private async measureRaw(iterations: number): Promise<{ gpuMs: number | null; wallMs: number }> {
     const { h, timer } = this;
@@ -204,10 +219,17 @@ export class KernelSampler {
 
     const gpuMs = await timer.readElapsedMs();
     const wallMs = performance.now() - cpuStart;
-    if (wallMs >= TIMESTAMP_CHECK_MIN_WALL_MS && !(gpuMs * TIMESTAMP_MAX_UNDERREPORT >= wallMs)) {
-      this.trustTimestamps = false;
+    const gpuWallMs = wallMs - this.overheadMs;
+    if (
+      iterations > 0 &&
+      gpuWallMs >= TIMESTAMP_CHECK_MIN_GPU_MS &&
+      !(gpuMs * TIMESTAMP_MAX_UNDERREPORT >= gpuWallMs)
+    ) {
+      this.timestampStrikes += 1;
+      if (this.timestampStrikes >= TIMESTAMP_STRIKES_TO_DEMOTE) this.trustTimestamps = false;
       return { gpuMs: null, wallMs };
     }
+    this.timestampStrikes = 0;
     return { gpuMs, wallMs };
   }
 }

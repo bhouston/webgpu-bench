@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-slot": "^1.2.0",
     "@tanstack/nitro-v2-vite-plugin": "^1.155.0",
     "@tanstack/react-router": "^1.170.17",
