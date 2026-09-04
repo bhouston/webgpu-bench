@@ -5,24 +5,14 @@ import {
   createPipeline,
   prepareKernelBenchmark,
   skippedResult,
-  FLOPS_METRIC,
   type BenchmarkMeta,
   type HarnessConfig,
   type PreparedBenchmark,
 } from './common.ts';
-import type { MetricDef } from '../types.ts';
 
 export interface FlopsKernelSpec {
   id: string;
-  label: string;
-  description: string;
   wgsl: string;
-  /**
-   * What this kernel's per-iteration count represents. Defaults to
-   * `FLOPS_METRIC`; kernels doing integer or bit-twiddling work (not IEEE
-   * floating-point ops) should pass `OPS_METRIC` instead.
-   */
-  metric?: MetricDef;
   /** Amount of `metric.unit` (same MAC-as-2 convention throughout) performed per loop iteration by a single thread. */
   flopsPerIteration: number;
   /**
@@ -74,13 +64,9 @@ export async function prepareFlopsBenchmark(
   const maxIterations = harness.iterations ?? spec.defaultIterations ?? DEFAULT_ITERATIONS;
   const metaAtWork = (iterations: number): BenchmarkMeta => ({
     id: spec.id,
-    label: spec.label,
-    description: spec.description,
-    source: spec.wgsl,
     category: 'compute',
     rows: threads,
     cols: iterations,
-    metric: spec.metric ?? FLOPS_METRIC,
     amountPerOp: threads * iterations * spec.flopsPerIteration,
   });
   const meta = metaAtWork(maxIterations);

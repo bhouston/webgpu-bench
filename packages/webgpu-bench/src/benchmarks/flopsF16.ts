@@ -12,9 +12,6 @@ export function prepareFlopsF16Scalar(ctx: GpuContext, harness: FlopsHarnessConf
     ctx,
     {
       id: 'flops-f16-scalar',
-      label: 'fp16 scalar FMA FLOPS',
-      description:
-        'Same eight independent, 4x-unrolled FMA chains as the fp32 scalar test, but every operand and accumulator is f16, so the chains run entirely in half precision.',
       wgsl: flopsF16ScalarWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -30,9 +27,6 @@ export function prepareFlopsF16Vec4(ctx: GpuContext, harness: FlopsHarnessConfig
     ctx,
     {
       id: 'flops-f16-vec4',
-      label: 'fp16 vec4 FLOPS',
-      description:
-        'Same single FMA chain as the fp32 vec4 test, but held in a vec4<f16> register: 4 independent half-precision lanes per step. Only GPUs with packed-half ALUs run this faster than fp32.',
       wgsl: flopsF16Vec4Wgsl,
       flopsPerIteration: 8,
       defaultIterations: 1024,
@@ -48,9 +42,6 @@ export function prepareFlopsF16Mat4(ctx: GpuContext, harness: FlopsHarnessConfig
     ctx,
     {
       id: 'flops-f16-mat4',
-      label: 'fp16 mat4 FLOPS',
-      description:
-        'Same bounded x = m * x + c recurrence as the fp32 mat4 test, but m, c, and x are all f16, so the mat4x4 x vec4 multiply runs entirely in half precision.',
       wgsl: flopsF16Mat4Wgsl,
       flopsPerIteration: 32,
       defaultIterations: 1024,
@@ -66,9 +57,6 @@ export function prepareFlopsF16Matvec(ctx: GpuContext, harness: FlopsHarnessConf
     ctx,
     {
       id: 'flops-f16-matvec',
-      label: 'fp16 matvec FLOPS',
-      description:
-        'Same register-resident 4x8 matvec tile as the fp32 matvec test, but weights, inputs, and dot() accumulation are all f16. Pure ALU: the fp16 win here comes only from the ALU, not from halved memory traffic.',
       wgsl: flopsF16MatvecWgsl,
       flopsPerIteration: 64,
       defaultIterations: 512,

@@ -42,8 +42,6 @@ import {
   errorResult,
   metricPerSecond,
   rowFromMeta,
-  FLOPS_METRIC,
-  BYTES_METRIC,
   type BenchmarkMeta,
   type HarnessConfig,
   type PreparedBenchmark,
@@ -148,13 +146,9 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
   for (const [id, category, prepare] of benchmarks) {
     const fallbackMeta: BenchmarkMeta = {
       id,
-      label: id,
-      description: '',
-      source: '',
       category,
       rows,
       cols,
-      metric: category === 'bandwidth' ? BYTES_METRIC : FLOPS_METRIC,
       amountPerOp: 0,
     };
     let prepared: PreparedBenchmark;

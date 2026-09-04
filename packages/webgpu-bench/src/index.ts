@@ -1,4 +1,6 @@
 export { runSuite } from './suite.ts';
+export { BENCHMARK_CATALOG } from './catalog.ts';
+export type { BenchmarkInfo } from './catalog.ts';
 export type {
   BenchmarkResult,
   SuiteOptions,
@@ -9,6 +11,7 @@ export type {
   BenchmarkStatus,
   TimingMethod,
   SamplingStopReason,
+  MetricDef,
 } from './types.ts';
 export { computeStats, isBestStable, isThrottled, tQuantile975 } from './stats.ts';
 export type { BestStableOptions } from './stats.ts';

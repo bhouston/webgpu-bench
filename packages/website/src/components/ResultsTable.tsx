@@ -1,10 +1,12 @@
 import { humanizeUnit } from 'humanize-units';
 import { Info } from 'lucide-react';
 
-import type { BenchmarkResult } from 'webgpu-bench';
+import { BENCHMARK_CATALOG, type BenchmarkInfo, type BenchmarkResult } from 'webgpu-bench';
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+const CATALOG_BY_ID = new Map(BENCHMARK_CATALOG.map((b) => [b.id, b]));
 
 function formatThroughput(value: number | undefined, unit: string): string {
   if (value === undefined || !Number.isFinite(value)) return '—';
@@ -25,7 +27,7 @@ function displayName(label: string): string {
  * the cell itself instead of a separate status column; rows still being
  * sampled show their best-so-far (dimmed) since the best only ever improves.
  */
-function MetricCell({ r }: { r: BenchmarkResult }) {
+function MetricCell({ r, info }: { r: BenchmarkResult; info: BenchmarkInfo }) {
   let text: string;
   let className = 'text-right tabular-nums';
   switch (r.status) {
@@ -38,11 +40,11 @@ function MetricCell({ r }: { r: BenchmarkResult }) {
       className += ' text-muted-foreground';
       break;
     case 'running':
-      text = r.metricValue === undefined ? 'measuring…' : formatThroughput(r.metricValue, r.metric.unit);
+      text = r.metricValue === undefined ? 'measuring…' : formatThroughput(r.metricValue, info.metric.unit);
       className += ' text-muted-foreground';
       break;
     case 'ok':
-      text = formatThroughput(r.metricValue, r.metric.unit);
+      text = formatThroughput(r.metricValue, info.metric.unit);
       if (r.stopReason === 'throttled') className += ' text-warning';
       break;
   }
@@ -54,26 +56,24 @@ function MetricCell({ r }: { r: BenchmarkResult }) {
 }
 
 /** (i) button that pops up the benchmark's description and WGSL source in a shadcn dialog. */
-function KernelInfoButton({ r }: { r: BenchmarkResult }) {
+function KernelInfoButton({ info }: { info: BenchmarkInfo }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
         <button
           type="button"
-          aria-label={`About ${displayName(r.label)}`}
+          aria-label={`About ${displayName(info.label)}`}
           className="text-muted-foreground hover:text-foreground"
         >
           <Info className="size-4" />
         </button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>{displayName(r.label)}</DialogTitle>
-        {r.description ? <DialogDescription className="break-words whitespace-pre-wrap">{r.description}</DialogDescription> : null}
-        {r.source ? (
-          <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs">
-            <code>{r.source.trim()}</code>
-          </pre>
-        ) : null}
+        <DialogTitle>{displayName(info.label)}</DialogTitle>
+        <DialogDescription className="break-words whitespace-pre-wrap">{info.description}</DialogDescription>
+        <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs">
+          <code>{info.source.trim()}</code>
+        </pre>
       </DialogContent>
     </Dialog>
   );
@@ -97,6 +97,8 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
       </TableHeader>
       <TableBody>
         {results.map((r) => {
+          const info = CATALOG_BY_ID.get(r.id);
+          if (!info) return null;
           const isFastest = r.status === 'ok' && r.stats?.min === fastestBest;
           const note =
             r.status === 'ok' && r.stopReason === 'throttled'
@@ -106,12 +108,12 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
             <TableRow key={r.id} className={isFastest ? 'bg-success/5' : undefined}>
               <TableCell className="font-medium">
                 <div className="flex items-center gap-1.5">
-                  <span>{displayName(r.label)}</span>
-                  <KernelInfoButton r={r} />
+                  <span>{displayName(info.label)}</span>
+                  <KernelInfoButton info={info} />
                 </div>
                 {note ? <div className="text-xs text-muted-foreground italic">{note}</div> : null}
               </TableCell>
-              <MetricCell r={r} />
+              <MetricCell r={r} info={info} />
             </TableRow>
           );
         })}

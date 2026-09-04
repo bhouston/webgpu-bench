@@ -46,13 +46,14 @@ export interface MetricDef {
  * after every sample it takes (still `running`, with the partial stats so
  * far), and when it finishes (ok/skipped/error) — so the UI can render
  * progress incrementally.
+ *
+ * Pure measurement, no identity/display metadata: label, description, WGSL
+ * source, and the metric definition all live on the matching `id` in
+ * `BENCHMARK_CATALOG` instead, so a UI joins a result onto its catalog row
+ * rather than getting them handed twice.
  */
 export interface BenchmarkResult {
   id: string;
-  label: string;
-  description: string;
-  /** WGSL source of the kernel that was run, for display alongside the result. */
-  source: string;
   category: BenchmarkCategory;
   status: BenchmarkStatus;
   message?: string;
@@ -77,8 +78,6 @@ export interface BenchmarkResult {
   stats?: Stats;
   /** Set for `ok` rows: see `SamplingStopReason`. */
   stopReason?: SamplingStopReason;
-  /** What `metricValue` counts. Set from the start, before any measurement lands. */
-  metric: MetricDef;
   /** Peak `<metric.unit>/s`, computed from the best run (`stats.min`). */
   metricValue?: number;
   timingMethod: TimingMethod;

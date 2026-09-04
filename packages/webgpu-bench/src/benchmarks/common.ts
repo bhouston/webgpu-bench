@@ -49,19 +49,17 @@ export function metricPerSecond(amountPerOp: number, perOpMs: number): number {
 /** Per-measurement knobs (`targetMs`, `targetDispatchMs`, `warmups`) shared by every benchmark. */
 export type HarnessConfig = MeasurementConfig;
 
-/** Everything about a benchmark that's known before it's measured. */
+/**
+ * Everything about a benchmark that's known before it's measured. Identity/display
+ * fields (label, description, source, metric) live in `BENCHMARK_CATALOG` instead —
+ * this is just what a live run needs to size and account for the work.
+ */
 export interface BenchmarkMeta {
   id: string;
-  label: string;
-  description: string;
-  /** WGSL source of the kernel, for display alongside the result. */
-  source: string;
   category: BenchmarkCategory;
   rows: number;
   cols: number;
-  /** What this benchmark's throughput number counts. */
-  metric: MetricDef;
-  /** Amount of `metric.unit` moved/computed per op. */
+  /** Amount of `metric.unit` (per the catalog's `MetricDef` for this id) moved/computed per op. */
   amountPerOp: number;
 }
 
@@ -96,13 +94,9 @@ export function prepareKernelBenchmark(opts: PrepareKernelOptions): PreparedBenc
     kind: 'kernel',
     meta: {
       id: opts.id,
-      label: opts.label,
-      description: opts.description,
-      source: opts.source,
       category: opts.category,
       rows: opts.rows,
       cols: opts.cols,
-      metric: opts.metric,
       amountPerOp: opts.amountPerOp,
     },
     metaAtWork: opts.metaAtWork,
@@ -145,9 +139,6 @@ export function errorResult(meta: BenchmarkMeta, error: unknown): BenchmarkResul
 export function rowFromMeta(meta: BenchmarkMeta): BenchmarkResult {
   return {
     id: meta.id,
-    label: meta.label,
-    description: meta.description,
-    source: meta.source,
     category: meta.category,
     status: 'running',
     rows: meta.rows,
@@ -155,7 +146,6 @@ export function rowFromMeta(meta: BenchmarkMeta): BenchmarkResult {
     innerIterations: 0,
     timesMs: [],
     throttledMs: [],
-    metric: meta.metric,
     timingMethod: 'cpu-wallclock',
   };
 }

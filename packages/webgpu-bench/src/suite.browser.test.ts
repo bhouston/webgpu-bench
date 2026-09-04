@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest';
 import { runSuite } from './suite.ts';
+import { BENCHMARK_CATALOG } from './catalog.ts';
 
 test('every kernel runs clean', { timeout: 60_000 }, async () => {
   const results = [];
@@ -15,4 +16,8 @@ test('every kernel runs clean', { timeout: 60_000 }, async () => {
       expect(r.metricValue, `${id} ${r.category}`).toBeGreaterThan(0);
     }
   }
+  // BENCHMARK_CATALOG is a hand-written mirror of runSuite's kernel list (kept
+  // GPU-free so a UI can render placeholder rows before a device is even
+  // acquired) — this is the tripwire that catches it drifting from the real thing.
+  expect(new Set(BENCHMARK_CATALOG.map((b) => b.id))).toEqual(new Set(byId.keys()));
 });

@@ -1,13 +1,7 @@
 import type { GpuContext } from '../gpu/context.ts';
 import type { GeneratedData } from '../data/generate.ts';
 import { createUniformBuffer, createStorageBuffer, createEmptyStorageBuffer } from '../gpu/buffers.ts';
-import {
-  createPipeline,
-  prepareKernelBenchmark,
-  BYTES_METRIC,
-  type HarnessConfig,
-  type PreparedBenchmark,
-} from './common.ts';
+import { createPipeline, prepareKernelBenchmark, type HarnessConfig, type PreparedBenchmark } from './common.ts';
 import { streamReadWgsl } from '../shaders/streamRead.ts';
 import { streamWriteWgsl } from '../shaders/streamWrite.ts';
 
@@ -39,15 +33,10 @@ export async function prepareReadBandwidth(
 
   return prepareKernelBenchmark({
     id: 'read-bandwidth',
-    label: 'Read bandwidth',
-    description:
-      'One thread per row; streams a large buffer in via vec4<f32> loads and addition only, writes one scalar. Read-bandwidth-bound.',
-    source: streamReadWgsl,
     category: 'bandwidth',
     ctx,
     rows: data.rows,
     cols: data.cols,
-    metric: BYTES_METRIC,
     amountPerOp: data.matrix.byteLength,
     workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
     pipeline,
@@ -81,15 +70,10 @@ export async function prepareWriteBandwidth(
 
   return prepareKernelBenchmark({
     id: 'write-bandwidth',
-    label: 'Write bandwidth',
-    description:
-      'One thread per row; stores computed vec4<f32> values into a large buffer with no buffer reads. Write-bandwidth-bound.',
-    source: streamWriteWgsl,
     category: 'bandwidth',
     ctx,
     rows: data.rows,
     cols: data.cols,
-    metric: BYTES_METRIC,
     amountPerOp: data.matrix.byteLength,
     workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
     pipeline,
