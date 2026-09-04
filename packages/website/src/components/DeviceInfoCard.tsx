@@ -1,4 +1,4 @@
-import type { DeviceInfo } from '@webgpu-profiler/performance-suite';
+import type { DeviceInfo } from 'webgpu-bench';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

@@ -12,7 +12,7 @@ RUN npm install -g pnpm@11.1.3
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/performance-suite/package.json packages/performance-suite/package.json
+COPY packages/webgpu-bench/package.json packages/webgpu-bench/package.json
 COPY packages/website/package.json packages/website/package.json
 
 RUN pnpm fetch --reporter=silent
@@ -21,6 +21,7 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile --prefer-offline
 
+RUN pnpm --filter webgpu-bench build
 RUN pnpm --filter website build
 
 EXPOSE 8080

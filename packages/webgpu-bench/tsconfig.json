@@ -4,11 +4,12 @@
     "composite": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "noEmit": true,
     "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "types": ["@webgpu/types"],
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.browser.test.ts"]
 }

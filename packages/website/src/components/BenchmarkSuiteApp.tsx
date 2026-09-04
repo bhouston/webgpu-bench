@@ -1,4 +1,4 @@
-import type { BenchmarkResult, DeviceInfo, SuiteProgressEvent } from '@webgpu-profiler/performance-suite';
+import type { BenchmarkResult, DeviceInfo, SuiteProgressEvent } from 'webgpu-bench';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -60,7 +60,7 @@ export function BenchmarkSuiteApp() {
     lastFlush.current = 0;
     try {
       // Loaded lazily so `navigator.gpu`/WebGPU types are only touched client-side.
-      const { runSuite } = await import('@webgpu-profiler/performance-suite');
+      const { runSuite } = await import('webgpu-bench');
       // Rows arrive once per change (setup, every measurement, finish) —
       // several times a second while sampling. Coalesce them and repaint at
       // most once per second so the table updates live without thrashing.
@@ -109,18 +109,10 @@ export function BenchmarkSuiteApp() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">WebGPU Bandwidth &amp; FLOPS Profiler</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Measures this device's raw WebGPU ceilings: read and write memory bandwidth, and fp32/fp16/int8 FLOPS at
-          scalar, vec4, mat4, and register-resident-matvec granularity (plus the packed int8 dot-product extension).
-          Every kernel isolates one resource — memory or ALU. Short measurements are taken round-robin across all
-          kernels with idle gaps in between, each kernel's <em>best</em> run is what's reported, runs that come in
-          throttled are discarded, and the whole suite pauses to cool down if the device is throttling — so a phone that
-          heats up mid-run still reports what it can do. Timing uses GPU-side timestamp queries where the device
-          supports them, CPU wall-clock otherwise.
-        </p>
-      </div>
+      <p className="max-w-3xl text-sm text-muted-foreground">
+        Measures this device's raw WebGPU ceilings: memory bandwidth and fp32/fp16/int8 FLOPS. Each kernel's{' '}
+        <em>best</em> run is reported; throttled runs are discarded.
+      </p>
 
       <div className="flex items-center gap-3">
         <Button onClick={() => void run()} disabled={state === 'running' || WEBGPU_UNAVAILABLE}>
