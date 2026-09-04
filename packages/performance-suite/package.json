@@ -7,7 +7,9 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "tsc --noEmit",
-    "dev": "tsc --noEmit -w --preserveWatchOutput"
+    "dev": "tsc --noEmit -w --preserveWatchOutput",
+    "test": "vitest run",
+    "test:browser": "vitest run --project browser"
   },
   "dependencies": {
     "vgpu": "^0.4.0"

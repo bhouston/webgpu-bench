@@ -9,3 +9,5 @@ coverage
 *.tsbuildinfo
 .env
 .DS_Store
+packages/performance-suite/.vitest-attachments/
+packages/performance-suite/src/__screenshots__/
