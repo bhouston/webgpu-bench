@@ -68,6 +68,7 @@ export async function prepareFlopsBenchmark(
     id: spec.id,
     label: spec.label,
     description: spec.description,
+    source: spec.wgsl,
     category: 'compute',
     rows: threads,
     cols: iterations,

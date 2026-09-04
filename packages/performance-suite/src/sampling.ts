@@ -11,7 +11,7 @@ export interface SamplingConfig {
   stableRounds?: number;
   /** Relative improvement that counts as "still improving". Default 0.01. */
   improvementTolerance?: number;
-  /** A measurement this fraction slower than the best is throttled and discarded. Default 0.10. */
+  /** A measurement this fraction slower than the best is throttled and discarded. Default 0.20. */
   throttleThreshold?: number;
   /** Idle gap between consecutive measurements, in ms. Default 100. */
   idleMs?: number;
@@ -19,7 +19,7 @@ export interface SamplingConfig {
   cooldownMs?: number;
   /** Cooldown pauses before giving up on still-unconverged benchmarks. Default 3. */
   maxCooldowns?: number;
-  /** Fraction of a round's measurements that must be throttled to trigger a cooldown. Default 0.5. */
+  /** Fraction of a round's measurements (and at least two) that must be throttled to trigger a cooldown. Default 0.5. */
   throttledFraction?: number;
 }
 
@@ -28,15 +28,12 @@ export const DEFAULT_SAMPLING: Required<SamplingConfig> = {
   maxRounds: 10,
   stableRounds: 2,
   improvementTolerance: 0.01,
-  throttleThreshold: 0.1,
+  throttleThreshold: 0.2,
   idleMs: 100,
   cooldownMs: 3000,
   maxCooldowns: 3,
   throttledFraction: 0.5,
 };
-
-/** Two throttled measurements in a row for one benchmark is itself enough to trigger a cooldown. */
-const CONSECUTIVE_THROTTLED_TRIGGER = 2;
 
 /** What the scheduler needs from a benchmark: something it can measure repeatedly. */
 export interface Sampleable {
@@ -56,8 +53,6 @@ export interface SampleState {
   throttledMs: number[];
   /** Best kept measurement so far; Infinity before the first. */
   bestMs: number;
-  /** How many of the most recent measurements (kept or not) were throttled, consecutively. */
-  consecutiveThrottled: number;
   stopReason?: SamplingStopReason;
   /** Set if calibration or a measurement threw; the benchmark is retired. */
   error?: unknown;
@@ -91,11 +86,12 @@ const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(reso
 export function recordSample(state: SampleState, ms: number, cfg: Required<SamplingConfig>): boolean {
   if (isThrottled(ms, state.bestMs, cfg.throttleThreshold)) {
     state.throttledMs.push(ms);
-    state.consecutiveThrottled += 1;
+    // A benchmark that keeps coming back throttled while the rest of the
+    // suite is fine (so no cooldown fires) must still terminate.
+    if (state.timesMs.length + state.throttledMs.length >= 2 * cfg.maxRounds) state.stopReason = 'max-rounds';
     return false;
   }
   state.timesMs.push(ms);
-  state.consecutiveThrottled = 0;
   if (ms < state.bestMs) state.bestMs = ms;
   if (
     isBestStable(state.timesMs, {
@@ -111,16 +107,17 @@ export function recordSample(state: SampleState, ms: number, cfg: Required<Sampl
   return true;
 }
 
-/** Whether the measurements taken in one round add up to "the device is throttled". */
-export function roundIsThrottled(
-  roundStates: readonly SampleState[],
-  roundThrottled: readonly boolean[],
-  cfg: Required<SamplingConfig>,
-): boolean {
-  if (roundStates.some((s) => s.consecutiveThrottled >= CONSECUTIVE_THROTTLED_TRIGGER)) return true;
+/**
+ * Whether the measurements taken in one round add up to "the device is
+ * throttled". Thermal throttling slows every kernel, so the signal is
+ * agreement across benchmarks: at least two of them, and at least
+ * `throttledFraction` of the round. One benchmark repeatedly coming in slow
+ * while the rest are fine is that benchmark's own noise (Safari's
+ * wall-clock timing of the write-bandwidth kernel jitters 15–40%), not
+ * heat — pausing the suite for it would just waste time.
+ */
+export function roundIsThrottled(roundThrottled: readonly boolean[], cfg: Required<SamplingConfig>): boolean {
   const throttledCount = roundThrottled.filter(Boolean).length;
-  // Need at least two benchmarks agreeing before calling a round throttled on
-  // the fraction alone; a single benchmark's single slow run is just noise.
   return throttledCount >= 2 && throttledCount / roundThrottled.length >= cfg.throttledFraction;
 }
 
@@ -164,13 +161,7 @@ export async function runSampling(
   const states = new Map<string, SampleState>();
   const samplers = new Map<string, Sampleable>();
   for (const b of benchmarks) {
-    states.set(b.id, {
-      id: b.id,
-      timesMs: [],
-      throttledMs: [],
-      bestMs: Number.POSITIVE_INFINITY,
-      consecutiveThrottled: 0,
-    });
+    states.set(b.id, { id: b.id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY });
     samplers.set(b.id, b);
   }
   let cooldowns = 0;
@@ -205,7 +196,7 @@ export async function runSampling(
     }
     calibrated = true;
 
-    if (roundStates.length > 0 && roundIsThrottled(roundStates, roundThrottled, cfg)) {
+    if (roundStates.length > 0 && roundIsThrottled(roundThrottled, cfg)) {
       const throttledIds = roundStates.filter((_, i) => roundThrottled[i]).map((s) => s.id);
       if (cooldowns >= cfg.maxCooldowns) {
         onProgress({ type: 'throttle-abort', throttledIds });
@@ -229,8 +220,6 @@ export async function runSampling(
         throttledIds,
       });
       await sleep(cfg.cooldownMs);
-      // Whatever happened before the pause shouldn't count against the next round.
-      for (const s of states.values()) s.consecutiveThrottled = 0;
     }
   }
 

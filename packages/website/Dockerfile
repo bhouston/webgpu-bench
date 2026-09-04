@@ -4,7 +4,7 @@ FROM --platform=linux/amd64 node:22-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm" \
     PATH="$PNPM_HOME:$PATH" \
     NODE_ENV=production \
-    PORT=3500 \
+    PORT=8080 \
     CI=true
 
 RUN npm install -g pnpm@11.1.3
@@ -23,6 +23,6 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 
 RUN pnpm --filter website build
 
-EXPOSE 3500
+EXPOSE 8080
 
 CMD ["node", "packages/website/.output/server/index.mjs"]

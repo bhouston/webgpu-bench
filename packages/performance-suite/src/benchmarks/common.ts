@@ -58,6 +58,8 @@ export interface BenchmarkMeta {
   id: string;
   label: string;
   description: string;
+  /** WGSL source of the kernel, for display alongside the result. */
+  source: string;
   category: BenchmarkCategory;
   rows: number;
   cols: number;
@@ -100,6 +102,7 @@ export function prepareKernelBenchmark(opts: PrepareKernelOptions): PreparedBenc
       id: opts.id,
       label: opts.label,
       description: opts.description,
+      source: opts.source,
       category: opts.category,
       rows: opts.rows,
       cols: opts.cols,
@@ -148,6 +151,7 @@ export function rowFromMeta(meta: BenchmarkMeta): BenchmarkResult {
     id: meta.id,
     label: meta.label,
     description: meta.description,
+    source: meta.source,
     category: meta.category,
     status: 'running',
     rows: meta.rows,

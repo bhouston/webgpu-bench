@@ -55,6 +55,17 @@ export interface KernelHarness extends MeasurementConfig {
 const MAX_PROBE_GROWTH = 4;
 
 /**
+ * GPU timestamps are cross-checked against wall clock during calibration.
+ * Wall clock is an upper bound on GPU time (it includes submit and readback
+ * overhead), but a GPU reading under a third of a wall reading this long is
+ * a broken timer, not overhead. Safari's `timestamp-query` does exactly this
+ * — reporting ~1ms for a ~70ms batch — and trusting it makes calibration
+ * batch ~70x too much work into one command buffer, which hangs the browser.
+ */
+const TIMESTAMP_CHECK_MIN_WALL_MS = 4;
+const TIMESTAMP_MAX_UNDERREPORT = 3;
+
+/**
  * Takes individual timed measurements of one kernel on demand, so a
  * scheduler can interleave many kernels round-robin (see `runSampling`)
  * instead of hammering one kernel until it converges. Holds the GPU timer
@@ -67,13 +78,16 @@ export class KernelSampler {
   private readonly timer: GpuTimer;
   private iterations = 0;
   private currentWork: number | undefined;
+  /** Cleared if calibration catches the GPU timestamps disagreeing with wall clock. */
+  private trustTimestamps: boolean;
 
   constructor(private readonly h: KernelHarness) {
     this.timer = new GpuTimer(h.device, h.useTimestamps);
+    this.trustTimestamps = this.timer.supported;
   }
 
   get timingMethod(): TimingMethod {
-    return this.timer.supported ? 'gpu-timestamp' : 'cpu-wallclock';
+    return this.trustTimestamps ? 'gpu-timestamp' : 'cpu-wallclock';
   }
 
   /** Number of dispatches batched into each measurement; 0 until calibrated. */
@@ -92,6 +106,16 @@ export class KernelSampler {
    * than 4x per step, so even a very slow GPU never gets handed a long
    * dispatch), then batches dispatches to fill `targetMs`, then runs the
    * discarded warmups. The probes double as pipeline warm-up.
+   *
+   * Batch sizing uses *wall-clock* time, never the GPU timestamps: wall
+   * clock includes submit/readback overhead so it can only over-estimate,
+   * which errs toward smaller batches — whereas a broken timestamp (see
+   * `TIMESTAMP_MAX_UNDERREPORT`) would size a batch tens of times too large
+   * and hang the browser. The work ramp does use the GPU time while it's
+   * trusted (a single dispatch's wall time is mostly readback overhead, so
+   * sizing from it leaves dispatches far too small), which is safe there
+   * because growth is capped at 4x per step: a bogus reading can at worst
+   * overshoot one step before the wall-clock cross-check demotes it.
    */
   async calibrate(): Promise<void> {
     const targetMs = this.h.targetMs ?? DEFAULT_MEASUREMENT.targetMs;
@@ -99,12 +123,15 @@ export class KernelSampler {
     const warmups = this.h.warmups ?? DEFAULT_MEASUREMENT.warmups;
     const maxIterations = this.h.maxIterations ?? DEFAULT_MEASUREMENT.maxIterations;
 
-    let dispatchMs: number;
     const knob = this.h.work;
     if (knob) {
       let work = Math.max(1, Math.floor(knob.min));
       knob.apply(work);
-      dispatchMs = await this.measureOnce(1);
+      const dispatchTime = async () => {
+        const { gpuMs, wallMs } = await this.measureRaw(1);
+        return gpuMs ?? wallMs;
+      };
+      let dispatchMs = await dispatchTime();
       // Ramp: the dispatch time is ~linear in work, so extrapolate straight
       // to the target, but cap the growth per step and re-measure.
       while (work < knob.max && dispatchMs < targetDispatchMs) {
@@ -113,18 +140,29 @@ export class KernelSampler {
         if (next <= work) break;
         work = next;
         knob.apply(work);
-        dispatchMs = await this.measureOnce(1);
+        dispatchMs = await dispatchTime();
       }
       this.currentWork = work;
-    } else {
-      dispatchMs = await this.measureOnce(1);
     }
 
-    const rawIterations = Math.round(targetMs / Math.max(dispatchMs, 1e-6));
-    this.iterations = Math.min(maxIterations, Math.max(1, rawIterations));
+    // Batch sizing: grow from a single dispatch until one measurement's wall
+    // time is near the target. Wall clock over-estimates a tiny dispatch
+    // (fixed submit/readback overhead dominates), so the first extrapolation
+    // under-shoots and a couple of refinement steps home in from below. The
+    // very first measurement never ends the search: it can absorb a one-off
+    // stall (lazy shader compile, GC) that would leave the batch at 1.
+    let iterations = 1;
+    for (let step = 0; step < 4; step++) {
+      const { wallMs } = await this.measureRaw(iterations);
+      if ((step > 0 && wallMs >= targetMs / 2) || iterations >= maxIterations) break;
+      const next = Math.min(maxIterations, Math.floor((iterations * targetMs) / Math.max(wallMs, 1e-6)));
+      if (next <= iterations) break;
+      iterations = next;
+    }
+    this.iterations = iterations;
 
     for (let i = 0; i < warmups; i++) {
-      await this.measureOnce(this.iterations);
+      await this.measureRaw(this.iterations);
     }
   }
 
@@ -133,31 +171,43 @@ export class KernelSampler {
     if (this.iterations === 0) {
       throw new Error('KernelSampler.sample() called before calibrate()');
     }
-    return this.measureOnce(this.iterations);
+    const { gpuMs, wallMs } = await this.measureRaw(this.iterations);
+    return (gpuMs ?? wallMs) / this.iterations;
   }
 
   destroy(): void {
     this.timer.destroy();
   }
 
-  /** Submits `iterations` dispatches as one command buffer and returns the per-dispatch time in ms. */
-  private async measureOnce(iterations: number): Promise<number> {
+  /**
+   * Submits `iterations` dispatches as one command buffer and waits for
+   * them. Always returns the wall-clock time; returns the GPU-timestamp
+   * time too while the timestamps are trusted, demoting the sampler to
+   * wall-clock for good the first time a reading is implausibly small.
+   */
+  private async measureRaw(iterations: number): Promise<{ gpuMs: number | null; wallMs: number }> {
     const { h, timer } = this;
+    const useTimestamps = this.trustTimestamps;
     const encoder = h.device.createCommandEncoder();
-    const pass = encoder.beginComputePass({ timestampWrites: timer.timestampWrites });
+    const pass = encoder.beginComputePass({ timestampWrites: useTimestamps ? timer.timestampWrites : undefined });
     h.encode(pass, iterations);
     pass.end();
-    timer.resolve(encoder);
+    if (useTimestamps) timer.resolve(encoder);
 
     const cpuStart = performance.now();
     h.device.queue.submit([encoder.finish()]);
 
-    if (timer.supported) {
-      const totalMs = await timer.readElapsedMs();
-      return totalMs / iterations;
+    if (!useTimestamps) {
+      await h.device.queue.onSubmittedWorkDone();
+      return { gpuMs: null, wallMs: performance.now() - cpuStart };
     }
-    await h.device.queue.onSubmittedWorkDone();
-    const totalMs = performance.now() - cpuStart;
-    return totalMs / iterations;
+
+    const gpuMs = await timer.readElapsedMs();
+    const wallMs = performance.now() - cpuStart;
+    if (wallMs >= TIMESTAMP_CHECK_MIN_WALL_MS && !(gpuMs * TIMESTAMP_MAX_UNDERREPORT >= wallMs)) {
+      this.trustTimestamps = false;
+      return { gpuMs: null, wallMs };
+    }
+    return { gpuMs, wallMs };
   }
 }

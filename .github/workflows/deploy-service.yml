@@ -25,7 +25,7 @@ on:
         required: false
         type: string
         description: 'Cloud Run env vars (multi-line KEY=VALUE)'
-        default: 'PORT=3500'
+        default: ''
     secrets:
       GCP_SA_KEY:
         required: true
@@ -76,5 +76,5 @@ jobs:
           service: ${{ inputs.service_name }}
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE_PATH }}
-          flags: '--allow-unauthenticated --timeout=3600 --memory=1Gi --port=3500'
+          flags: '--allow-unauthenticated --timeout=3600 --memory=1Gi'
           env_vars: ${{ inputs.env_vars }}

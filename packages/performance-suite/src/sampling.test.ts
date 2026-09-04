@@ -9,10 +9,10 @@ import {
 } from './sampling.ts';
 import type { SuiteProgressEvent } from './types.ts';
 
-const cfg = resolveSamplingConfig({ idleMs: 0, cooldownMs: 0 });
+const cfg = resolveSamplingConfig({ idleMs: 0, cooldownMs: 0, throttleThreshold: 0.1 });
 
 function freshState(id = 'k'): SampleState {
-  return { id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY, consecutiveThrottled: 0 };
+  return { id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY };
 }
 
 /** A fake kernel that hands out the given timings in order (last one repeats). */
@@ -50,12 +50,6 @@ describe('recordSample', () => {
     expect(s.timesMs).toEqual([10]);
     expect(s.throttledMs).toEqual([12]);
     expect(s.bestMs).toBe(10);
-    expect(s.consecutiveThrottled).toBe(1);
-    recordSample(s, 13, cfg);
-    expect(s.consecutiveThrottled).toBe(2);
-    // A good sample resets the streak.
-    recordSample(s, 10.01, cfg);
-    expect(s.consecutiveThrottled).toBe(0);
   });
 
   it('stops at maxRounds when the best keeps improving', () => {
@@ -69,17 +63,18 @@ describe('recordSample', () => {
 
 describe('roundIsThrottled', () => {
   it('needs at least two throttled benchmarks and the configured fraction', () => {
-    const states = [freshState('a'), freshState('b'), freshState('c'), freshState('d')];
-    expect(roundIsThrottled(states, [true, false, false, false], cfg)).toBe(false);
-    expect(roundIsThrottled(states, [true, true, false, false], cfg)).toBe(true);
-    expect(roundIsThrottled(states.slice(0, 3), [true, true, false], cfg)).toBe(true);
-    expect(roundIsThrottled(states.slice(0, 3), [true, false, false], cfg)).toBe(false);
+    expect(roundIsThrottled([true, false, false, false], cfg)).toBe(false);
+    expect(roundIsThrottled([true, true, false, false], cfg)).toBe(true);
+    expect(roundIsThrottled([true, true, false], cfg)).toBe(true);
+    expect(roundIsThrottled([true, false, false], cfg)).toBe(false);
   });
 
-  it('is triggered by any single benchmark throttled twice running', () => {
-    const a = freshState('a');
-    a.consecutiveThrottled = 2;
-    expect(roundIsThrottled([a, freshState('b'), freshState('c')], [true, false, false], cfg)).toBe(true);
+  it('ignores one persistently noisy benchmark among healthy ones', () => {
+    expect(roundIsThrottled([true, false, false, false, false, false], cfg)).toBe(false);
+  });
+
+  it('never triggers on a single benchmark', () => {
+    expect(roundIsThrottled([true], cfg)).toBe(false);
   });
 });
 
@@ -117,7 +112,7 @@ describe('runSampling', () => {
   it('pauses the suite on a throttled round, then recovers and keeps the best', async () => {
     const events: SuiteProgressEvent[] = [];
     const sleeps: number[] = [];
-    // Both benchmarks: one clean sample, then two throttled rounds, then clean again.
+    // Both benchmarks: one clean sample, then two throttled rounds (device hot), then clean again.
     const a = scripted('a', [10, 15, 15, 10, 10]);
     const b = scripted('b', [20, 30, 30, 20, 20]);
     const results = await runSampling([a, b], {
@@ -136,6 +131,32 @@ describe('runSampling', () => {
     expect(results.get('a')!.timesMs).toEqual([10, 10, 10]);
     expect(results.get('a')!.stopReason).toBe('converged');
     expect(results.get('b')!.stopReason).toBe('converged');
+  });
+
+  it('does not pause for one noisy benchmark while the others are healthy', async () => {
+    const events: SuiteProgressEvent[] = [];
+    const noisy = scripted('noisy', [10, 13, 13, 10, 12, 10]);
+    const a = scripted('a', [20, 20, 20]);
+    const b = scripted('b', [30, 30, 30]);
+    const results = await runSampling([noisy, a, b], {
+      idleMs: 0,
+      throttleThreshold: 0.1,
+      onProgress: (e) => events.push(e),
+      sleep: async () => {},
+    });
+    expect(events.filter((e) => e.type === 'cooldown')).toHaveLength(0);
+    expect(results.get('noisy')!.stopReason).toBe('converged');
+    expect(results.get('noisy')!.throttledMs).toEqual([13, 13, 12]);
+  });
+
+  it('caps a benchmark that only ever comes back throttled on its own', async () => {
+    const events: SuiteProgressEvent[] = [];
+    const stuck = scripted('stuck', [10, 20]); // one good run, then slow forever
+    const results = await runSampling([stuck], { idleMs: 0, maxRounds: 5, onProgress: (e) => events.push(e) });
+    expect(events.filter((e) => e.type === 'cooldown')).toHaveLength(0);
+    expect(results.get('stuck')!.stopReason).toBe('max-rounds');
+    expect(results.get('stuck')!.timesMs).toEqual([10]);
+    expect(results.get('stuck')!.throttledMs).toHaveLength(9);
   });
 
   it('gives up with stopReason "throttled" once the cooldown budget is spent', async () => {

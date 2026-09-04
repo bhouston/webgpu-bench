@@ -13,6 +13,5 @@ jobs:
       service_name: webgpu-profiler
       dockerfile: packages/website/Dockerfile
       context: .
-      env_vars: 'PORT=3500'
     secrets:
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}

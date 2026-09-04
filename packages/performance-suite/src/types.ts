@@ -13,7 +13,8 @@ export interface Stats {
 /**
  * Why sampling stopped for a benchmark:
  * - `converged`: the best run stopped improving (see `SuiteOptions.stableRounds`).
- * - `max-rounds`: the best run was still improving when the per-benchmark round cap was hit.
+ * - `max-rounds`: the per-benchmark cap was hit — the best was still improving, or the benchmark
+ *   kept producing throttled runs on its own while the rest of the suite was fine.
  * - `throttled`: the device kept coming back throttled even after the suite's cooldown pauses
  *   were exhausted, so the best run may understate the device (treat the row with suspicion).
  */
@@ -37,6 +38,8 @@ export interface BenchmarkResult {
   id: string;
   label: string;
   description: string;
+  /** WGSL source of the kernel that was run, for display alongside the result. */
+  source: string;
   category: BenchmarkCategory;
   status: BenchmarkStatus;
   message?: string;
@@ -53,9 +56,8 @@ export interface BenchmarkResult {
   /** Per-op time (ms) for each kept timed measurement, in the order taken. Length varies: sampling is adaptive. */
   timesMs: number[];
   /**
-   * Per-op time (ms) for measurements that were discarded as thermally
-   * throttled — more than `throttleThreshold` slower than the best run seen
-   * so far. Kept for diagnostics; never feeds `stats`.
+   * Per-op time (ms) for measurements that were discarded as throttled —
+   * more than `throttleThreshold` slower than the best run seen so far. Kept for diagnostics; never feeds `stats`.
    */
   throttledMs: number[];
   /** Summary over `timesMs`. `stats.min` is the best run. */
@@ -110,7 +112,9 @@ export interface SuiteOptions {
   improvementTolerance?: number;
   /**
    * A measurement more than this fraction slower than the benchmark's best
-   * run is classified as thermally throttled and discarded. Default 0.10 (10%).
+   * run is classified as thermally throttled and discarded. Default 0.20
+   * (20%): real throttling is 20–50%, while ordinary wall-clock jitter on
+   * Safari runs to ~15%.
    */
   throttleThreshold?: number;
   /** Idle gap between consecutive measurements, in ms, so the GPU duty-cycles instead of running flat out. Default 100. */
@@ -121,8 +125,8 @@ export interface SuiteOptions {
   maxCooldowns?: number;
   /**
    * Suite-wide throttle trigger: a cooldown starts when at least this
-   * fraction of the benchmarks measured in a round come back throttled (or
-   * when any single benchmark is throttled twice in a row). Default 0.5.
+   * fraction (and at least two) of the benchmarks measured in a round come
+   * back throttled. Default 0.5.
    */
   throttledFraction?: number;
   /** Number of GPU threads (invocations) launched by the raw-FLOPS compute benchmarks. Default 1,048,576. */

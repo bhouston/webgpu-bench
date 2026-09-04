@@ -67,18 +67,23 @@ order. Instead the suite:
    kept measurements and its best hasn't improved by more than `improvementTolerance` (1%) over the
    last `stableRounds` (2) of them. On a cool GPU that's 3 measurements per kernel; a GPU still
    ramping its clock keeps sampling, up to `maxRounds` (10, flagged `max-rounds`).
-6. **Discards throttled runs.** A measurement more than `throttleThreshold` (10%) slower than that
+6. **Discards throttled runs.** A measurement more than `throttleThreshold` (20%) slower than that
    kernel's best is thermal noise, not information: it's recorded in `throttledMs` for diagnostics
    but never feeds `stats` or convergence.
 7. **Pauses the whole suite when the device is throttling.** If half the kernels in a round come back
-   throttled (`throttledFraction`), or any single kernel is throttled twice running, the suite sleeps
+   throttled (`throttledFraction`, at least two of them), the suite sleeps
    for `cooldownMs` (3s) and tries again — throttling recovers, so a later round can still beat the
    current best. After `maxCooldowns` (3) pauses it gives up: whatever is still unconverged is
    reported with its best run so far and `stopReason: 'throttled'` (shown as a warning in the table).
 
 `onProgress` reports round boundaries and cooldowns; all of the knobs above are `SuiteOptions`.
 GPU timing uses `timestamp-query` when available (pure device-side time, no CPU/driver overhead);
-otherwise it falls back to wall-clock around `queue.onSubmittedWorkDone()`. Mean / median / stddev /
+otherwise it falls back to wall-clock around `queue.onSubmittedWorkDone()`. "Available" is checked, not
+trusted: every timestamp reading is compared with wall clock and a kernel is demoted to wall-clock
+timing the first time the GPU reading is under a third of it. Safari needs this — outside a
+cross-origin-isolated context its timestamps are quantized to the point of reporting ~1ms for a 70ms
+batch — and all batch sizing uses wall clock regardless, since a batch sized from a bogus timestamp is
+a multi-second command buffer that hangs the GPU process. Mean / median / stddev /
 ci95 over the kept runs are still in `BenchmarkResult.stats` if you want a sustained number — the
 table just shows the best.
 

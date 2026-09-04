@@ -36,6 +36,7 @@ export async function prepareReadBandwidth(
     label: 'Read bandwidth',
     description:
       'One thread per row; streams a large buffer in via vec4<f32> loads and addition only, writes one scalar. Read-bandwidth-bound.',
+    source: streamReadWgsl,
     category: 'bandwidth',
     ctx,
     rows: data.rows,
@@ -78,6 +79,7 @@ export async function prepareWriteBandwidth(
     label: 'Write bandwidth',
     description:
       'One thread per row; stores computed vec4<f32> values into a large buffer with no buffer reads. Write-bandwidth-bound.',
+    source: streamWriteWgsl,
     category: 'bandwidth',
     ctx,
     rows: data.rows,

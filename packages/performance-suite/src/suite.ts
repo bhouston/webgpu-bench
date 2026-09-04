@@ -24,6 +24,21 @@ import {
   prepareFlopsI8Dp4a,
 } from './benchmarks/flopsI8.ts';
 import {
+  prepareFlopsF32Div,
+  prepareFlopsI32Div,
+  prepareFlopsF32Sqrt,
+  prepareFlopsF32Rsqrt,
+  prepareFlopsF32Pow,
+  prepareFlopsF32Sincos,
+  prepareFlopsF32Log,
+} from './benchmarks/flopsMath.ts';
+import {
+  prepareFlopsU32PackUnpack,
+  prepareFlopsI32F32Convert,
+  prepareFlopsF32F16Convert,
+  prepareFlopsI32F16Convert,
+} from './benchmarks/flopsConvert.ts';
+import {
   errorResult,
   flopsAndBandwidth,
   rowFromMeta,
@@ -109,6 +124,17 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
     compute('flops-i8-matvec', () => prepareFlopsI8Matvec(ctx, flopsHarness)),
     compute('flops-i8-matvec-dp4a', () => prepareFlopsI8MatvecDp4a(ctx, flopsHarness)),
     compute('flops-i8-dp4a', () => prepareFlopsI8Dp4a(ctx, flopsHarness)),
+    compute('flops-f32-div', () => prepareFlopsF32Div(ctx, flopsHarness)),
+    compute('flops-i32-div', () => prepareFlopsI32Div(ctx, flopsHarness)),
+    compute('flops-f32-sqrt', () => prepareFlopsF32Sqrt(ctx, flopsHarness)),
+    compute('flops-f32-rsqrt', () => prepareFlopsF32Rsqrt(ctx, flopsHarness)),
+    compute('flops-f32-pow', () => prepareFlopsF32Pow(ctx, flopsHarness)),
+    compute('flops-f32-sincos', () => prepareFlopsF32Sincos(ctx, flopsHarness)),
+    compute('flops-f32-log', () => prepareFlopsF32Log(ctx, flopsHarness)),
+    compute('flops-u32-packunpack', () => prepareFlopsU32PackUnpack(ctx, flopsHarness)),
+    compute('flops-i32-f32-convert', () => prepareFlopsI32F32Convert(ctx, flopsHarness)),
+    compute('flops-f32-f16-convert', () => prepareFlopsF32F16Convert(ctx, flopsHarness)),
+    compute('flops-i32-f16-convert', () => prepareFlopsI32F16Convert(ctx, flopsHarness)),
   ];
 
   // Phase 1: build every benchmark's GPU resources up front. Rows that can't
@@ -117,7 +143,17 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
   // the first measurement lands.
   const scheduled: ScheduledKernel[] = [];
   for (const [id, category, prepare] of benchmarks) {
-    const fallbackMeta: BenchmarkMeta = { id, label: id, description: '', category, rows, cols, bytes: 0, flops: 0 };
+    const fallbackMeta: BenchmarkMeta = {
+      id,
+      label: id,
+      description: '',
+      source: '',
+      category,
+      rows,
+      cols,
+      bytes: 0,
+      flops: 0,
+    };
     let prepared: PreparedBenchmark;
     try {
       prepared = await prepare();
