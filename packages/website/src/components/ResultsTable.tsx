@@ -2,26 +2,7 @@ import { humanizeUnit } from 'humanize-units';
 
 import type { BenchmarkResult } from '@webgpu-profiler/performance-suite';
 
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-function formatMs(value: number): string {
-  // `value` is in ms; humanizeUnit works off the base (seconds) unit so it can
-  // pick µs/ms/s as appropriate via the standard SI prefixes.
-  return humanizeUnit(value / 1000, { postfix: 's', unitSeparator: ' ', significantDigits: 3 });
-}
-
-function formatStddevPct(mean: number, stddev: number): string {
-  if (!Number.isFinite(mean) || mean <= 0) return '—';
-  return `${((stddev / mean) * 100).toFixed(1)}%`;
-}
-
-function formatRuns(r: BenchmarkResult): string {
-  if (r.status !== 'ok') return '—';
-  // Sampling is adaptive: a row that ran to the cap without converging is
-  // flagged so a noisy number isn't mistaken for a settled one.
-  return r.stopReason === 'max-runs' ? `${r.timesMs.length} (noisy)` : String(r.timesMs.length);
-}
 
 function formatThroughput(value: number | undefined, unit: string): string {
   if (value === undefined || !Number.isFinite(value)) return '—';
@@ -35,26 +16,44 @@ const CATEGORY_LABEL: Record<string, string> = {
   compute: 'Raw compute',
 };
 
-function StatusBadge({ status }: { status: BenchmarkResult['status'] }) {
-  switch (status) {
-    case 'running':
-      return <Badge variant="secondary">running…</Badge>;
-    case 'ok':
-      return <Badge variant="success">ok</Badge>;
-    case 'skipped':
-      return <Badge variant="warning">skipped</Badge>;
+/**
+ * What goes in a value cell. Rows that can't produce a number say why in the
+ * cell itself instead of a separate status column; rows still being sampled
+ * show their best-so-far (dimmed) since the best only ever improves.
+ */
+function ValueCell({ r, value, unit }: { r: BenchmarkResult; value: number | undefined; unit: string }) {
+  let text: string;
+  let className = 'text-right tabular-nums';
+  switch (r.status) {
     case 'error':
-      return <Badge variant="destructive">error</Badge>;
+      text = 'error';
+      className += ' text-destructive';
+      break;
+    case 'skipped':
+      text = 'skipped';
+      className += ' text-muted-foreground';
+      break;
+    case 'running':
+      text = value === undefined ? 'measuring…' : formatThroughput(value, unit);
+      className += ' text-muted-foreground';
+      break;
+    case 'ok':
+      text = formatThroughput(value, unit);
+      if (r.stopReason === 'throttled') className += ' text-warning';
+      break;
   }
+  return (
+    <TableCell className={className} title={r.status === 'ok' && r.stopReason === 'throttled' ? r.message : undefined}>
+      {text}
+    </TableCell>
+  );
 }
 
 export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
-  // A median of exactly 0 (or negative/NaN) isn't a real timing — it means
-  // the GPU timer read back garbage (e.g. a dispatch that never ran, or
-  // finished faster than the timestamp-query clock's resolution). Excluding
-  // it here stops one bad reading from crowning itself "fastest".
-  const fastestMedian = Math.min(
-    ...results.filter((r) => r.status === 'ok' && r.stats && r.stats.median > 0).map((r) => r.stats!.median),
+  // Highlight the fastest finished benchmark (by best run). A best of
+  // exactly 0 isn't a real timing, so it can't crown itself.
+  const fastestBest = Math.min(
+    ...results.filter((r) => r.status === 'ok' && r.stats && r.stats.min > 0).map((r) => r.stats!.min),
     Number.POSITIVE_INFINITY,
   );
 
@@ -64,44 +63,27 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
         <TableRow>
           <TableHead>Benchmark</TableHead>
           <TableHead>Category</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Median</TableHead>
-          <TableHead className="text-right">StdDev %</TableHead>
-          <TableHead className="text-right">Runs</TableHead>
-          <TableHead className="text-right">Throughput</TableHead>
-          <TableHead className="text-right">Bandwidth</TableHead>
+          <TableHead className="text-right">Best Throughput</TableHead>
+          <TableHead className="text-right">Best Bandwidth</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {results.map((r) => {
-          const isFastest = r.status === 'ok' && r.stats?.median === fastestMedian;
+          const isFastest = r.status === 'ok' && r.stats?.min === fastestBest;
+          const note =
+            r.status === 'ok' && r.stopReason === 'throttled'
+              ? 'Thermally throttled; may understate the device.'
+              : r.message;
           return (
             <TableRow key={r.id} className={isFastest ? 'bg-success/5' : undefined}>
               <TableCell className="font-medium">
                 <div>{r.label}</div>
                 {r.description ? <div className="text-xs text-muted-foreground">{r.description}</div> : null}
-                {r.message ? <div className="text-xs text-muted-foreground italic">{r.message}</div> : null}
+                {note ? <div className="text-xs text-muted-foreground italic">{note}</div> : null}
               </TableCell>
               <TableCell>{CATEGORY_LABEL[r.category] ?? r.category}</TableCell>
-              <TableCell>
-                <StatusBadge status={r.status} />
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{r.stats ? formatMs(r.stats.median) : '—'}</TableCell>
-              <TableCell className="text-right tabular-nums">
-                {r.stats ? formatStddevPct(r.stats.mean, r.stats.stddev) : '—'}
-              </TableCell>
-              <TableCell
-                className={`text-right tabular-nums ${r.stopReason === 'max-runs' ? 'text-warning' : ''}`}
-                title={
-                  r.stopReason === 'max-runs'
-                    ? 'Timings did not converge before the run cap; treat with suspicion.'
-                    : 'Timed measurements taken before the 95% confidence interval converged.'
-                }
-              >
-                {formatRuns(r)}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{formatThroughput(r.gflops, 'FLOP')}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatThroughput(r.gbps, 'B')}</TableCell>
+              <ValueCell r={r} value={r.gflops} unit="FLOP" />
+              <ValueCell r={r} value={r.gbps} unit="B" />
             </TableRow>
           );
         })}

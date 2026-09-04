@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeStats, hasConverged, tQuantile975 } from './stats.ts';
+import { computeStats, isBestStable, isThrottled, tQuantile975 } from './stats.ts';
 
 describe('tQuantile975', () => {
   it('matches the textbook table', () => {
@@ -38,55 +38,51 @@ describe('computeStats', () => {
   });
 });
 
-describe('hasConverged', () => {
-  const opts = { minRuns: 3, precision: 0.03 };
+describe('isBestStable', () => {
+  const opts = { minRuns: 3, stableRuns: 2, tolerance: 0.01 };
 
-  it('never converges below minRuns, even with identical samples', () => {
-    expect(hasConverged([1, 1], opts)).toBe(false);
-    expect(hasConverged([1, 1, 1], opts)).toBe(true);
+  it('never settles below minRuns / stableRuns + 1, even with identical samples', () => {
+    expect(isBestStable([1], opts)).toBe(false);
+    expect(isBestStable([1, 1], opts)).toBe(false);
+    expect(isBestStable([1, 1, 1], opts)).toBe(true);
   });
 
-  it('converges on three tight samples', () => {
-    // CV ≈ 0.5%; at n=3 the CI half-width is ~2.48 * CV ≈ 1.2% < 3%.
-    expect(hasConverged([100, 100.5, 99.5], opts)).toBe(true);
+  it('settles on three samples where the first is the best (typical cool GPU)', () => {
+    expect(isBestStable([100, 100.5, 101], opts)).toBe(true);
   });
 
-  it('does not converge on three noisy samples but does once more are added', () => {
-    // CV ≈ 2%: 3 samples give a ±5% interval, but 8 well-behaved samples get under ±3%.
-    const noisy = [98, 100, 102];
-    expect(hasConverged(noisy, opts)).toBe(false);
-    expect(hasConverged([...noisy, 100, 99, 101, 100, 100], opts)).toBe(true);
+  it('keeps going while the best is still improving (GPU clock ramping up)', () => {
+    expect(isBestStable([110, 105, 100], opts)).toBe(false);
+    expect(isBestStable([110, 105, 100, 99], opts)).toBe(false);
+    // Two samples that don't beat 99 by more than 1% settle it.
+    expect(isBestStable([110, 105, 100, 99, 98.5, 99.2], opts)).toBe(true);
   });
 
-  it('is a straight threshold on the relative CI half-width', () => {
-    const values = [10, 11, 12, 10, 11];
-    const { mean, ci95 } = computeStats(values);
-    const rel = ci95 / mean;
-    expect(hasConverged(values, { minRuns: 3, precision: rel + 1e-9 })).toBe(true);
-    expect(hasConverged(values, { minRuns: 3, precision: rel - 1e-9 })).toBe(false);
+  it('treats a sub-tolerance improvement as noise, not progress', () => {
+    expect(isBestStable([100, 99.5, 99.8], opts)).toBe(true);
+    expect(isBestStable([100, 98.5, 99.8], opts)).toBe(false);
   });
 
-  it('never converges on degenerate timings (zero or NaN means)', () => {
-    expect(hasConverged([0, 0, 0, 0], opts)).toBe(false);
-    expect(hasConverged([NaN, NaN, NaN], opts)).toBe(false);
-    expect(hasConverged([-1, -1, -1], opts)).toBe(false);
+  it('only looks at the trailing stableRuns samples', () => {
+    expect(isBestStable([100, 50, 50, 50], { ...opts, stableRuns: 2 })).toBe(true);
+    expect(isBestStable([100, 50, 50, 50], { ...opts, stableRuns: 3 })).toBe(false);
   });
 
-  it('stops within 10 runs for typical GPU jitter and bails at the cap for wild variance', () => {
-    const converging = [5.0, 5.05, 4.98, 5.1, 5.02, 4.97, 5.03, 5.0, 5.04, 4.99];
-    let stoppedAt = 0;
-    const taken: number[] = [];
-    for (const v of converging) {
-      taken.push(v);
-      if (hasConverged(taken, opts)) {
-        stoppedAt = taken.length;
-        break;
-      }
-    }
-    expect(stoppedAt).toBeGreaterThanOrEqual(3);
-    expect(stoppedAt).toBeLessThan(10);
+  it('never settles on degenerate timings (zero or NaN)', () => {
+    expect(isBestStable([0, 0, 0, 0], opts)).toBe(false);
+    expect(isBestStable([NaN, NaN, NaN], opts)).toBe(false);
+    expect(isBestStable([-1, -1, -1], opts)).toBe(false);
+  });
+});
 
-    const wild = [1, 5, 2, 9, 3, 7, 1, 8, 2, 6];
-    for (let n = 1; n <= wild.length; n++) expect(hasConverged(wild.slice(0, n), opts)).toBe(false);
+describe('isThrottled', () => {
+  it('flags samples more than the threshold slower than the best', () => {
+    expect(isThrottled(111, 100, 0.1)).toBe(true);
+    expect(isThrottled(110, 100, 0.1)).toBe(false);
+    expect(isThrottled(90, 100, 0.1)).toBe(false);
+  });
+  it('never flags anything before there is a best', () => {
+    expect(isThrottled(500, Number.POSITIVE_INFINITY, 0.1)).toBe(false);
+    expect(isThrottled(500, 0, 0.1)).toBe(false);
   });
 });

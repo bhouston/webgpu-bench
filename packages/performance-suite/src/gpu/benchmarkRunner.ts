@@ -1,113 +1,163 @@
 import { GpuTimer } from './timing.ts';
-import type { SamplingStopReason, Stats, TimingMethod } from '../types.ts';
-import { computeStats, hasConverged } from '../stats.ts';
+import type { TimingMethod } from '../types.ts';
 
-/** Knobs controlling how many timed measurements a benchmark takes. */
-export interface SamplingConfig {
-  /** Target duration of a single measurement, in ms; sets how many dispatches get batched. Default 300. */
+/** Knobs controlling how one timed measurement of a kernel is taken. */
+export interface MeasurementConfig {
+  /**
+   * Target duration of a single measurement (one submitted command buffer),
+   * in ms; sets how many dispatches get batched. Default 100.
+   */
   targetMs?: number;
+  /**
+   * Target duration of a single *dispatch*, in ms. A dispatch can't be
+   * preempted, so a long one freezes the display; kernels that expose a
+   * work knob get it calibrated so one dispatch lands near this. Default 10.
+   */
+  targetDispatchMs?: number;
   /** Discarded measurements taken after calibration and before timing starts. Default 1. */
   warmups?: number;
-  /** Fewest timed measurements before convergence can be declared. Default 3. */
-  minRuns?: number;
-  /** Most timed measurements taken even if the timings never converge. Default 10. */
-  maxRuns?: number;
-  /** Convergence target: 95% CI half-width on the mean as a fraction of the mean. Default 0.03. */
-  precision?: number;
-}
-
-export const DEFAULT_SAMPLING: Required<SamplingConfig> = {
-  targetMs: 300,
-  warmups: 1,
-  minRuns: 3,
-  maxRuns: 10,
-  precision: 0.03,
-};
-
-export interface KernelHarness extends SamplingConfig {
-  device: GPUDevice;
-  /** Records `iterations` back-to-back dispatches (same pipeline/bind group) into the pass. */
-  encode: (pass: GPUComputePassEncoder, iterations: number) => void;
-  useTimestamps: boolean;
   /** Hard cap on how many dispatches get batched into one measurement (guards against runaway calibration). */
   maxIterations?: number;
 }
 
-export interface TimedRun {
-  timingMethod: TimingMethod;
-  innerIterations: number;
-  /** Per-op time in ms, one entry per timed run. */
-  timesMs: number[];
-  stats: Stats;
-  stopReason: SamplingStopReason;
-}
-
-async function measureOnce(h: KernelHarness, iterations: number, timer: GpuTimer): Promise<number> {
-  const encoder = h.device.createCommandEncoder();
-  const pass = encoder.beginComputePass({ timestampWrites: timer.timestampWrites });
-  h.encode(pass, iterations);
-  pass.end();
-  timer.resolve(encoder);
-
-  const cpuStart = performance.now();
-  h.device.queue.submit([encoder.finish()]);
-
-  if (timer.supported) {
-    const totalMs = await timer.readElapsedMs();
-    return totalMs / iterations;
-  }
-  await h.device.queue.onSubmittedWorkDone();
-  const totalMs = performance.now() - cpuStart;
-  return totalMs / iterations;
-}
+export const DEFAULT_MEASUREMENT: Required<MeasurementConfig> = {
+  targetMs: 100,
+  targetDispatchMs: 10,
+  warmups: 1,
+  maxIterations: 200_000,
+};
 
 /**
- * Calibrates how many dispatches to batch into one measurement (so a single
- * measurement takes roughly `targetMs`), runs `warmups` throwaway
- * measurements, then samples adaptively: at least `minRuns` timed
- * measurements, stopping as soon as the 95% confidence interval on the mean
- * is within `precision` of the mean (see `hasConverged`), and never more than
- * `maxRuns` so a noisy device can't stall the suite.
+ * A kernel's tunable per-dispatch work (for the raw-FLOPS kernels: the
+ * in-shader loop trip count). Lets the sampler size a single dispatch to
+ * `targetDispatchMs` on whatever GPU it finds itself on, instead of a fixed
+ * count that's a few ms on a desktop and a second on a phone.
  */
-export async function runTimedBenchmark(h: KernelHarness): Promise<TimedRun> {
-  const targetMs = h.targetMs ?? DEFAULT_SAMPLING.targetMs;
-  const warmups = h.warmups ?? DEFAULT_SAMPLING.warmups;
-  const minRuns = Math.max(1, h.minRuns ?? DEFAULT_SAMPLING.minRuns);
-  const maxRuns = Math.max(minRuns, h.maxRuns ?? DEFAULT_SAMPLING.maxRuns);
-  const precision = h.precision ?? DEFAULT_SAMPLING.precision;
-  const maxIterations = h.maxIterations ?? 200_000;
+export interface WorkKnob {
+  /** Smallest sensible work per dispatch (also the first calibration probe, so keep it cheap). */
+  min: number;
+  /** Largest work per dispatch (the kernel's own default; bounds numerical range and per-thread setup amortisation). */
+  max: number;
+  /** Make subsequent dispatches use this much work (e.g. rewrite the params uniform). */
+  apply(work: number): void;
+}
 
-  const timer = new GpuTimer(h.device, h.useTimestamps);
-  try {
-    // Calibration: time a small batch, then scale up to hit the target duration.
-    // (This also serves as a first, untimed warm-up of the pipeline.)
-    const calibrationIterations = 4;
-    const perOpMsEstimate = await measureOnce(h, calibrationIterations, timer);
-    const rawIterations = Math.round(targetMs / Math.max(perOpMsEstimate, 1e-6));
-    const iterations = Math.min(maxIterations, Math.max(1, rawIterations));
+export interface KernelHarness extends MeasurementConfig {
+  device: GPUDevice;
+  /** Records `iterations` back-to-back dispatches (same pipeline/bind group) into the pass. */
+  encode: (pass: GPUComputePassEncoder, iterations: number) => void;
+  useTimestamps: boolean;
+  /** Present for kernels whose per-dispatch work can be resized at runtime. */
+  work?: WorkKnob;
+}
+
+/** Never grow a calibration probe by more than this factor per step, so no probe can run away on a slow GPU. */
+const MAX_PROBE_GROWTH = 4;
+
+/**
+ * Takes individual timed measurements of one kernel on demand, so a
+ * scheduler can interleave many kernels round-robin (see `runSampling`)
+ * instead of hammering one kernel until it converges. Holds the GPU timer
+ * and the calibrated batch size between calls.
+ *
+ * Lifecycle: `calibrate()` once (sizes the dispatch and the batch, runs the
+ * warmups), then `sample()` as often as wanted, then `destroy()`.
+ */
+export class KernelSampler {
+  private readonly timer: GpuTimer;
+  private iterations = 0;
+  private currentWork: number | undefined;
+
+  constructor(private readonly h: KernelHarness) {
+    this.timer = new GpuTimer(h.device, h.useTimestamps);
+  }
+
+  get timingMethod(): TimingMethod {
+    return this.timer.supported ? 'gpu-timestamp' : 'cpu-wallclock';
+  }
+
+  /** Number of dispatches batched into each measurement; 0 until calibrated. */
+  get innerIterations(): number {
+    return this.iterations;
+  }
+
+  /** Per-dispatch work the kernel was calibrated to; undefined if it has no work knob. */
+  get work(): number | undefined {
+    return this.currentWork;
+  }
+
+  /**
+   * Sizes the kernel so one dispatch takes about `targetDispatchMs` (when it
+   * has a work knob: start from the cheapest probe and ramp up, never more
+   * than 4x per step, so even a very slow GPU never gets handed a long
+   * dispatch), then batches dispatches to fill `targetMs`, then runs the
+   * discarded warmups. The probes double as pipeline warm-up.
+   */
+  async calibrate(): Promise<void> {
+    const targetMs = this.h.targetMs ?? DEFAULT_MEASUREMENT.targetMs;
+    const targetDispatchMs = this.h.targetDispatchMs ?? DEFAULT_MEASUREMENT.targetDispatchMs;
+    const warmups = this.h.warmups ?? DEFAULT_MEASUREMENT.warmups;
+    const maxIterations = this.h.maxIterations ?? DEFAULT_MEASUREMENT.maxIterations;
+
+    let dispatchMs: number;
+    const knob = this.h.work;
+    if (knob) {
+      let work = Math.max(1, Math.floor(knob.min));
+      knob.apply(work);
+      dispatchMs = await this.measureOnce(1);
+      // Ramp: the dispatch time is ~linear in work, so extrapolate straight
+      // to the target, but cap the growth per step and re-measure.
+      while (work < knob.max && dispatchMs < targetDispatchMs) {
+        const wanted = (work * targetDispatchMs) / Math.max(dispatchMs, 1e-6);
+        const next = Math.min(knob.max, Math.floor(Math.min(wanted, work * MAX_PROBE_GROWTH)));
+        if (next <= work) break;
+        work = next;
+        knob.apply(work);
+        dispatchMs = await this.measureOnce(1);
+      }
+      this.currentWork = work;
+    } else {
+      dispatchMs = await this.measureOnce(1);
+    }
+
+    const rawIterations = Math.round(targetMs / Math.max(dispatchMs, 1e-6));
+    this.iterations = Math.min(maxIterations, Math.max(1, rawIterations));
 
     for (let i = 0; i < warmups; i++) {
-      await measureOnce(h, iterations, timer);
+      await this.measureOnce(this.iterations);
     }
+  }
 
-    const timesMs: number[] = [];
-    let stopReason: SamplingStopReason = 'max-runs';
-    while (timesMs.length < maxRuns) {
-      timesMs.push(await measureOnce(h, iterations, timer));
-      if (hasConverged(timesMs, { minRuns, precision })) {
-        stopReason = 'converged';
-        break;
-      }
+  /** One timed measurement: per-op time in ms. Requires `calibrate()` first. */
+  async sample(): Promise<number> {
+    if (this.iterations === 0) {
+      throw new Error('KernelSampler.sample() called before calibrate()');
     }
+    return this.measureOnce(this.iterations);
+  }
 
-    return {
-      timingMethod: timer.supported ? 'gpu-timestamp' : 'cpu-wallclock',
-      innerIterations: iterations,
-      timesMs,
-      stats: computeStats(timesMs),
-      stopReason,
-    };
-  } finally {
-    timer.destroy();
+  destroy(): void {
+    this.timer.destroy();
+  }
+
+  /** Submits `iterations` dispatches as one command buffer and returns the per-dispatch time in ms. */
+  private async measureOnce(iterations: number): Promise<number> {
+    const { h, timer } = this;
+    const encoder = h.device.createCommandEncoder();
+    const pass = encoder.beginComputePass({ timestampWrites: timer.timestampWrites });
+    h.encode(pass, iterations);
+    pass.end();
+    timer.resolve(encoder);
+
+    const cpuStart = performance.now();
+    h.device.queue.submit([encoder.finish()]);
+
+    if (timer.supported) {
+      const totalMs = await timer.readElapsedMs();
+      return totalMs / iterations;
+    }
+    await h.device.queue.onSubmittedWorkDone();
+    const totalMs = performance.now() - cpuStart;
+    return totalMs / iterations;
   }
 }

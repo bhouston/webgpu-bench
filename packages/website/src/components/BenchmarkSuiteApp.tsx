@@ -1,5 +1,5 @@
-import type { BenchmarkResult, DeviceInfo } from '@webgpu-profiler/performance-suite';
-import { useCallback, useEffect, useState } from 'react';
+import type { BenchmarkResult, DeviceInfo, SuiteProgressEvent } from '@webgpu-profiler/performance-suite';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,12 +11,32 @@ type RunState = 'idle' | 'running' | 'done' | 'error';
 
 const WEBGPU_UNAVAILABLE = typeof navigator === 'undefined' || !('gpu' in navigator);
 
+/** Table repaints are debounced to at most one per this many ms while the suite streams updates. */
+const UPDATE_INTERVAL_MS = 1000;
+
+function describeProgress(results: BenchmarkResult[], progress: SuiteProgressEvent | null): string {
+  const finished = results.filter((r) => r.status !== 'running').length;
+  const base = `${finished} of ${results.length} benchmark${results.length === 1 ? '' : 's'} settled`;
+  switch (progress?.type) {
+    case 'cooldown':
+      return `${base} — device is throttling, cooling down for ${(progress.ms / 1000).toFixed(0)}s (${progress.attempt}/${progress.maxAttempts})…`;
+    case 'round':
+      return `${base} — sampling round ${progress.round}…`;
+    default:
+      return `${base}…`;
+  }
+}
+
 export function BenchmarkSuiteApp() {
   const [state, setState] = useState<RunState>('idle');
   const [results, setResults] = useState<BenchmarkResult[]>([]);
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [env, setEnv] = useState<EnvironmentInfo | null>(null);
+  const [progress, setProgress] = useState<SuiteProgressEvent | null>(null);
+  const pendingRows = useRef(new Map<string, BenchmarkResult>());
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFlush = useRef(0);
 
   // Gather what the browser reveals about this machine as soon as the page
   // mounts (client-side only), so the card is useful before a run starts.
@@ -35,16 +55,51 @@ export function BenchmarkSuiteApp() {
     setResults([]);
     setDeviceInfo(null);
     setErrorMessage(null);
+    setProgress(null);
+    pendingRows.current.clear();
+    lastFlush.current = 0;
     try {
       // Loaded lazily so `navigator.gpu`/WebGPU types are only touched client-side.
       const { runSuite } = await import('@webgpu-profiler/performance-suite');
-      for await (const result of runSuite({ onDeviceInfo: setDeviceInfo })) {
+      // Rows arrive once per change (setup, every measurement, finish) —
+      // several times a second while sampling. Coalesce them and repaint at
+      // most once per second so the table updates live without thrashing.
+      const flush = () => {
+        if (pendingRows.current.size === 0) return;
+        const batch = [...pendingRows.current.values()];
+        pendingRows.current.clear();
+        lastFlush.current = performance.now();
         setResults((prev) => {
-          const next = prev.filter((r) => r.id !== result.id);
-          next.push(result);
+          const next = prev.slice();
+          for (const row of batch) {
+            const i = next.findIndex((r) => r.id === row.id);
+            if (i === -1) next.push(row);
+            else next[i] = row;
+          }
           return next;
         });
+      };
+      for await (const result of runSuite({ onDeviceInfo: setDeviceInfo, onProgress: setProgress })) {
+        pendingRows.current.set(result.id, result);
+        const elapsed = performance.now() - lastFlush.current;
+        if (elapsed >= UPDATE_INTERVAL_MS) {
+          if (flushTimer.current !== null) {
+            clearTimeout(flushTimer.current);
+            flushTimer.current = null;
+          }
+          flush();
+        } else if (flushTimer.current === null) {
+          flushTimer.current = setTimeout(() => {
+            flushTimer.current = null;
+            flush();
+          }, UPDATE_INTERVAL_MS - elapsed);
+        }
       }
+      if (flushTimer.current !== null) {
+        clearTimeout(flushTimer.current);
+        flushTimer.current = null;
+      }
+      flush();
       setState('done');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error));
@@ -59,9 +114,11 @@ export function BenchmarkSuiteApp() {
         <p className="max-w-3xl text-sm text-muted-foreground">
           Measures this device's raw WebGPU ceilings: read and write memory bandwidth, and fp32/fp16/int8 FLOPS at
           scalar, vec4, mat4, and register-resident-matvec granularity (plus the packed int8 dot-product extension).
-          Every kernel isolates one resource — memory or ALU — with a calibrated warmup, adaptive sampling (3–10 timed
-          measurements, stopping once the timings converge), and (where the device supports it) GPU-side timestamp-query
-          timing rather than CPU wall-clock.
+          Every kernel isolates one resource — memory or ALU. Short measurements are taken round-robin across all
+          kernels with idle gaps in between, each kernel's <em>best</em> run is what's reported, runs that come in
+          throttled are discarded, and the whole suite pauses to cool down if the device is throttling — so a phone that
+          heats up mid-run still reports what it can do. Timing uses GPU-side timestamp queries where the device
+          supports them, CPU wall-clock otherwise.
         </p>
       </div>
 
@@ -70,9 +127,7 @@ export function BenchmarkSuiteApp() {
           {state === 'running' ? 'Running…' : 'Run benchmark suite'}
         </Button>
         {state === 'running' ? (
-          <span className="text-sm text-muted-foreground">
-            {results.length} benchmark{results.length === 1 ? '' : 's'} complete…
-          </span>
+          <span className="text-sm text-muted-foreground">{describeProgress(results, progress)}</span>
         ) : null}
       </div>
 
@@ -100,7 +155,7 @@ export function BenchmarkSuiteApp() {
           <CardHeader>
             <CardTitle className="text-base">Results</CardTitle>
             <CardDescription>
-              Lower median time is better. Throughput is computed from the median of the timed runs.
+              Best run per kernel; numbers update live as sampling continues and only ever improve.
             </CardDescription>
           </CardHeader>
           <CardContent>

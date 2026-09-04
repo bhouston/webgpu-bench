@@ -1,6 +1,7 @@
-/** Summary statistics computed over a set of timed measurements. */
+/** Summary statistics computed over the kept (non-throttled) timed measurements. */
 export interface Stats {
   mean: number;
+  /** The best (fastest) kept measurement — the headline number, see `BenchmarkResult.gflops`. */
   min: number;
   max: number;
   median: number;
@@ -10,11 +11,13 @@ export interface Stats {
 }
 
 /**
- * Why adaptive sampling stopped: `converged` once the 95% CI on the mean was
- * within the precision target, `max-runs` when the cap was hit first (the
- * timings were too noisy to converge — treat the row with some suspicion).
+ * Why sampling stopped for a benchmark:
+ * - `converged`: the best run stopped improving (see `SuiteOptions.stableRounds`).
+ * - `max-rounds`: the best run was still improving when the per-benchmark round cap was hit.
+ * - `throttled`: the device kept coming back throttled even after the suite's cooldown pauses
+ *   were exhausted, so the best run may understate the device (treat the row with suspicion).
  */
-export type SamplingStopReason = 'converged' | 'max-runs';
+export type SamplingStopReason = 'converged' | 'max-rounds' | 'throttled';
 
 export type TimingMethod = 'gpu-timestamp' | 'cpu-wallclock';
 
@@ -25,8 +28,10 @@ export type BenchmarkStatus = 'running' | 'ok' | 'skipped' | 'error';
 
 /**
  * One row of the results table. `runSuite` yields a fresh object for a given
- * `id` each time its status changes (running -> ok/skipped/error) so the UI
- * can render progress incrementally.
+ * `id` every time the row changes — when the benchmark starts (`running`),
+ * after every sample it takes (still `running`, with the partial stats so
+ * far), and when it finishes (ok/skipped/error) — so the UI can render
+ * progress incrementally.
  */
 export interface BenchmarkResult {
   id: string;
@@ -38,49 +43,101 @@ export interface BenchmarkResult {
   /**
    * Logical problem size actually benchmarked. For `bandwidth` kernels:
    * the streamed buffer's rows/cols (after padding to a multiple of 4).
-   * For `compute` kernels: thread count / in-shader FMA loop trip count.
+   * For `compute` kernels: thread count / in-shader loop trip count (as
+   * calibrated for this GPU, see `SuiteOptions.targetDispatchMs`).
    */
   rows: number;
   cols: number;
   /** Number of GPU dispatches batched into each timed measurement. */
   innerIterations: number;
-  /** Per-op time (ms) for each of the timed measurement runs (after warmup). Length varies: sampling is adaptive. */
+  /** Per-op time (ms) for each kept timed measurement, in the order taken. Length varies: sampling is adaptive. */
   timesMs: number[];
+  /**
+   * Per-op time (ms) for measurements that were discarded as thermally
+   * throttled — more than `throttleThreshold` slower than the best run seen
+   * so far. Kept for diagnostics; never feeds `stats`.
+   */
+  throttledMs: number[];
+  /** Summary over `timesMs`. `stats.min` is the best run. */
   stats?: Stats;
-  /** Set for `ok` rows: whether sampling stopped because the timings converged or because it hit `maxRuns`. */
+  /** Set for `ok` rows: see `SamplingStopReason`. */
   stopReason?: SamplingStopReason;
-  /** GFLOP/s throughput, computed from stats.median when available. */
+  /** Peak GFLOP/s throughput, computed from the best run (`stats.min`). */
   gflops?: number;
-  /** Achieved memory bandwidth in GB/s, computed from stats.median when available. */
+  /** Peak memory bandwidth in GB/s, computed from the best run (`stats.min`). */
   gbps?: number;
   timingMethod: TimingMethod;
 }
+
+/** Suite-level progress events (round boundaries and thermal cooldown pauses). */
+export type SuiteProgressEvent =
+  | { type: 'round'; round: number; active: number }
+  | { type: 'cooldown'; attempt: number; maxAttempts: number; ms: number; throttledIds: string[] }
+  | { type: 'throttle-abort'; throttledIds: string[] };
 
 export interface SuiteOptions {
   /** Streamed buffer rows (for the bandwidth benchmarks). Padded up to a multiple of 4. Default 4096. */
   rows?: number;
   /** Streamed buffer cols (for the bandwidth benchmarks). Padded up to a multiple of 4. Default 4096. */
   cols?: number;
-  /** Target wall-clock duration per timed measurement, in ms. Default 300. */
-  targetMs?: number;
-  /** Number of discarded warmup measurements before timing starts (the calibration pass is a further untimed run). Default 1. */
-  warmups?: number;
-  /** Fewest timed measurements per benchmark before the convergence check can stop sampling. Default 3. */
-  minRuns?: number;
-  /** Most timed measurements per benchmark, reached only if the timings never converge. Default 10. */
-  maxRuns?: number;
   /**
-   * Convergence target: sampling stops once the 95% confidence-interval
-   * half-width on the mean is at most this fraction of the mean. Default 0.03
-   * (±3%). Lower is stricter and takes more runs.
+   * Target duration of a single timed measurement, in ms. Sets how many
+   * dispatches get batched per measurement. Kept short (default 100) so the
+   * suite's total GPU-busy time — and therefore heat — stays low.
    */
-  precision?: number;
+  targetMs?: number;
+  /**
+   * Target duration of a single GPU dispatch, in ms. A dispatch can't be
+   * preempted, so a long one freezes the display for its whole duration;
+   * the raw-FLOPS kernels have their loop trip count calibrated (from a tiny
+   * first probe upward, never more than 4x per step) so one dispatch lands
+   * near this on whatever GPU is running. Default 10.
+   */
+  targetDispatchMs?: number;
+  /** Number of discarded warmup measurements per benchmark before timing starts (the calibration pass is a further untimed run). Default 1. */
+  warmups?: number;
+  /** Fewest kept measurements per benchmark before it can be declared converged. Default 3. */
+  minRounds?: number;
+  /** Most kept measurements per benchmark, reached only if the best run keeps improving. Default 10. */
+  maxRounds?: number;
+  /**
+   * A benchmark is converged once its best run has not improved by more than
+   * `improvementTolerance` over this many consecutive kept measurements.
+   * Default 2.
+   */
+  stableRounds?: number;
+  /** Relative improvement of the best run that counts as "still improving" for `stableRounds`. Default 0.01 (1%). */
+  improvementTolerance?: number;
+  /**
+   * A measurement more than this fraction slower than the benchmark's best
+   * run is classified as thermally throttled and discarded. Default 0.10 (10%).
+   */
+  throttleThreshold?: number;
+  /** Idle gap between consecutive measurements, in ms, so the GPU duty-cycles instead of running flat out. Default 100. */
+  idleMs?: number;
+  /** How long the whole suite pauses when it detects throttling, in ms. Default 3000. */
+  cooldownMs?: number;
+  /** How many cooldown pauses to attempt before giving up and reporting the still-unconverged benchmarks as `throttled`. Default 3. */
+  maxCooldowns?: number;
+  /**
+   * Suite-wide throttle trigger: a cooldown starts when at least this
+   * fraction of the benchmarks measured in a round come back throttled (or
+   * when any single benchmark is throttled twice in a row). Default 0.5.
+   */
+  throttledFraction?: number;
   /** Number of GPU threads (invocations) launched by the raw-FLOPS compute benchmarks. Default 1,048,576. */
   computeThreads?: number;
-  /** Trip count of the in-shader loop each thread runs in the raw-FLOPS compute benchmarks. Overrides every kernel's own default (256–1024, chosen so each dispatch takes several ms). */
+  /**
+   * Pins the trip count of the in-shader loop in the raw-FLOPS compute
+   * benchmarks, disabling per-dispatch calibration. Left unset, each kernel's
+   * default (256–1024) is the *ceiling* and the sampler picks the count that
+   * makes one dispatch take ~`targetDispatchMs`.
+   */
   computeIterations?: number;
   /** Called once with the resolved GPU device/adapter info before benchmarks start. */
   onDeviceInfo?: (info: DeviceInfo) => void;
+  /** Called at round boundaries and when the suite pauses for a thermal cooldown. */
+  onProgress?: (event: SuiteProgressEvent) => void;
 }
 
 export interface DeviceInfo {

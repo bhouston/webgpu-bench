@@ -1,10 +1,9 @@
 import type { GpuContext } from '../gpu/context.ts';
 import type { GeneratedData } from '../data/generate.ts';
 import { createUniformBuffer, createStorageBuffer, createEmptyStorageBuffer } from '../gpu/buffers.ts';
-import { createPipeline, runKernelBenchmark, type HarnessConfig } from './common.ts';
+import { createPipeline, prepareKernelBenchmark, type HarnessConfig, type PreparedBenchmark } from './common.ts';
 import { streamReadWgsl } from '../shaders/streamRead.ts';
 import { streamWriteWgsl } from '../shaders/streamWrite.ts';
-import type { BenchmarkResult } from '../types.ts';
 
 /**
  * Read-bandwidth test: streams the (already-allocated, matrix-sized) input
@@ -12,11 +11,11 @@ import type { BenchmarkResult } from '../types.ts';
  * single scalar per thread. Reads vastly outweigh writes, so `gbps` here is
  * a read-bandwidth-bound number close to the device's peak.
  */
-export async function benchmarkReadBandwidth(
+export async function prepareReadBandwidth(
   ctx: GpuContext,
   data: GeneratedData,
   harness: HarnessConfig = {},
-): Promise<BenchmarkResult> {
+): Promise<PreparedBenchmark> {
   const { device } = ctx;
   const cols4 = data.cols / 4;
   const pipeline = await createPipeline(device, 'stream-read', streamReadWgsl);
@@ -32,10 +31,11 @@ export async function benchmarkReadBandwidth(
     ],
   });
 
-  return runKernelBenchmark({
+  return prepareKernelBenchmark({
     id: 'read-bandwidth',
     label: 'Read bandwidth',
-    description: 'One thread per row; streams a large buffer in via vec4<f32> loads and addition only, writes one scalar. Read-bandwidth-bound.',
+    description:
+      'One thread per row; streams a large buffer in via vec4<f32> loads and addition only, writes one scalar. Read-bandwidth-bound.',
     category: 'bandwidth',
     ctx,
     rows: data.rows,
@@ -55,11 +55,11 @@ export async function benchmarkReadBandwidth(
  * output buffer. No buffer reads at all, so `gbps` here is a
  * write-bandwidth-bound number close to the device's peak.
  */
-export async function benchmarkWriteBandwidth(
+export async function prepareWriteBandwidth(
   ctx: GpuContext,
   data: GeneratedData,
   harness: HarnessConfig = {},
-): Promise<BenchmarkResult> {
+): Promise<PreparedBenchmark> {
   const { device } = ctx;
   const cols4 = data.cols / 4;
   const pipeline = await createPipeline(device, 'stream-write', streamWriteWgsl);
@@ -73,10 +73,11 @@ export async function benchmarkWriteBandwidth(
     ],
   });
 
-  return runKernelBenchmark({
+  return prepareKernelBenchmark({
     id: 'write-bandwidth',
     label: 'Write bandwidth',
-    description: 'One thread per row; stores computed vec4<f32> values into a large buffer with no buffer reads. Write-bandwidth-bound.',
+    description:
+      'One thread per row; stores computed vec4<f32> values into a large buffer with no buffer reads. Write-bandwidth-bound.',
     category: 'bandwidth',
     ctx,
     rows: data.rows,

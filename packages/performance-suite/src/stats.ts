@@ -36,35 +36,42 @@ export function computeStats(values: readonly number[]): Stats {
   return { mean, min, max, median, stddev, ci95 };
 }
 
-export interface ConvergenceOptions {
-  /** Never declare convergence with fewer samples than this. */
+export interface BestStableOptions {
+  /** Never declare the best stable with fewer samples than this. */
   minRuns: number;
-  /** Target: 95% CI half-width on the mean, as a fraction of the mean (0.03 = ±3%). */
-  precision: number;
+  /** The best must have gone this many consecutive samples without a meaningful improvement. */
+  stableRuns: number;
+  /** A new best more than this fraction below the previous best counts as an improvement (0.01 = 1%). */
+  tolerance: number;
 }
 
 /**
- * Sequential stopping rule for adaptive sampling.
+ * Stopping rule for best-of-N sampling.
  *
- * After each measurement the harness asks whether the samples gathered so far
- * already pin down the mean tightly enough. "Tightly enough" is defined via a
- * Student-t confidence interval: with `n` samples of standard deviation `s`,
- * the true mean lies within `t(n-1) * s / sqrt(n)` of the sample mean with 95%
- * confidence. Convergence means that half-width is at most `precision` times
- * the mean, so e.g. 3 samples with a coefficient of variation below ~1.2%
- * converge at ±3%, while noisier data needs more samples before the shrinking
- * `t / sqrt(n)` factor gets the interval under the target.
+ * The reported statistic is the *minimum* time, since every source of noise a
+ * benchmark meets (thermal throttling, clock ramp, compositor frames, other
+ * apps) only ever makes a run slower — the fastest run is the closest thing
+ * to the device's true capability. So sampling is done once the minimum has
+ * settled: the last `stableRuns` samples failed to beat the best seen before
+ * them by more than `tolerance`. Three tight samples converge immediately
+ * (minRuns 3, stableRuns 2: sample 1 sets the best, samples 2 and 3 confirm
+ * it); a still-ramping GPU that keeps producing faster runs keeps sampling.
  *
- * Because the rule is evaluated repeatedly ("optional stopping") the realised
- * confidence is somewhat below the nominal 95% — acceptable for a benchmark
- * whose reported statistic is the median anyway, and bounded by `minRuns`.
- *
- * Degenerate data (non-positive or non-finite mean) never converges, so the
+ * Degenerate data (non-positive or non-finite best) never converges, so the
  * caller runs to its cap and can then diagnose the bad timings itself.
  */
-export function hasConverged(values: readonly number[], opts: ConvergenceOptions): boolean {
-  if (values.length < Math.max(2, opts.minRuns)) return false;
-  const { mean, ci95 } = computeStats(values);
-  if (!Number.isFinite(mean) || mean <= 0) return false;
-  return ci95 / mean <= opts.precision;
+export function isBestStable(values: readonly number[], opts: BestStableOptions): boolean {
+  const n = values.length;
+  if (n < Math.max(opts.stableRuns + 1, opts.minRuns, 2)) return false;
+  const best = Math.min(...values);
+  if (!Number.isFinite(best) || best <= 0) return false;
+  const priorBest = Math.min(...values.slice(0, n - opts.stableRuns));
+  // Stable iff none of the trailing samples improved on the prior best by more than the tolerance.
+  return best >= priorBest * (1 - opts.tolerance);
+}
+
+/** True when `sampleMs` is more than `threshold` (fraction) slower than `bestMs` — the signature of a throttled run. */
+export function isThrottled(sampleMs: number, bestMs: number, threshold: number): boolean {
+  if (!Number.isFinite(bestMs) || bestMs <= 0) return false;
+  return sampleMs > bestMs * (1 + threshold);
 }

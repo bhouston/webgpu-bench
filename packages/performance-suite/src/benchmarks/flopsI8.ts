@@ -1,16 +1,16 @@
 import type { GpuContext } from '../gpu/context.ts';
-import { runFlopsBenchmark, type FlopsHarnessConfig } from './flopsCommon.ts';
+import { prepareFlopsBenchmark, type FlopsHarnessConfig } from './flopsCommon.ts';
 import { flopsI8ScalarWgsl } from '../shaders/flopsI8Scalar.ts';
 import { flopsI8Vec4Wgsl } from '../shaders/flopsI8Vec4.ts';
 import { flopsI8Mat4Wgsl } from '../shaders/flopsI8Mat4.ts';
 import { flopsI8Dp4aWgsl } from '../shaders/flopsI8Dp4a.ts';
 import { flopsI8MatvecWgsl } from '../shaders/flopsI8Matvec.ts';
 import { flopsI8MatvecDp4aWgsl } from '../shaders/flopsI8MatvecDp4a.ts';
-import type { BenchmarkResult } from '../types.ts';
+import type { PreparedBenchmark } from './common.ts';
 
 /** Raw int8-range FLOPS: eight independent scalar i32 multiply-add chains per thread, unrolled 4x. */
-export function benchmarkFlopsI8Scalar(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsI8Scalar(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-scalar',
@@ -26,8 +26,8 @@ export function benchmarkFlopsI8Scalar(ctx: GpuContext, harness: FlopsHarnessCon
 }
 
 /** int8-range vec4 FLOPS: one integer FMA chain on a vec4<i32> register (4 independent lanes). */
-export function benchmarkFlopsI8Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsI8Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-vec4',
@@ -43,8 +43,8 @@ export function benchmarkFlopsI8Vec4(ctx: GpuContext, harness: FlopsHarnessConfi
 }
 
 /** int8-range mat4 FLOPS: a 4x4 integer matvec emulated via four dot(vec4<i32>) calls (WGSL has no mat4x4<i32>). */
-export function benchmarkFlopsI8Mat4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsI8Mat4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-mat4',
@@ -60,8 +60,8 @@ export function benchmarkFlopsI8Mat4(ctx: GpuContext, harness: FlopsHarnessConfi
 }
 
 /** int8 register-resident matvec tile with weights unpacked to vec4<i32>, two integer dot() calls per output row. */
-export function benchmarkFlopsI8Matvec(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsI8Matvec(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-matvec',
@@ -77,8 +77,11 @@ export function benchmarkFlopsI8Matvec(ctx: GpuContext, harness: FlopsHarnessCon
 }
 
 /** int8 register-resident matvec tile on packed u32 words, two dot4I8Packed calls per output row. */
-export function benchmarkFlopsI8MatvecDp4a(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsI8MatvecDp4a(
+  ctx: GpuContext,
+  harness: FlopsHarnessConfig = {},
+): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-matvec-dp4a',
@@ -95,8 +98,8 @@ export function benchmarkFlopsI8MatvecDp4a(ctx: GpuContext, harness: FlopsHarnes
 }
 
 /** int8 packed-dot-product FLOPS: dot4I8Packed from the packed_4x8_integer_dot_product extension, run in a tight accumulation loop. */
-export function benchmarkFlopsI8Dp4a(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsI8Dp4a(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-dp4a',

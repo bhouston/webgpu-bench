@@ -159,7 +159,12 @@ export async function collectEnvironmentInfo(): Promise<EnvironmentInfo> {
     }
     if (uaData.platform) info.os = uaData.platform;
     try {
-      const high = await uaData.getHighEntropyValues?.(['platformVersion', 'architecture', 'bitness', 'fullVersionList']);
+      const high = await uaData.getHighEntropyValues?.([
+        'platformVersion',
+        'architecture',
+        'bitness',
+        'fullVersionList',
+      ]);
       if (high) {
         if (high.platform) info.os = high.platform;
         if (high.platformVersion) {

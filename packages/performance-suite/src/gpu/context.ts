@@ -6,10 +6,7 @@ export interface GpuContext {
   info: DeviceInfo;
 }
 
-const OPTIONAL_FEATURES: GPUFeatureName[] = [
-  'shader-f16' as GPUFeatureName,
-  'timestamp-query' as GPUFeatureName,
-];
+const OPTIONAL_FEATURES: GPUFeatureName[] = ['shader-f16' as GPUFeatureName, 'timestamp-query' as GPUFeatureName];
 
 // `packed_4x8_integer_dot_product` is a WGSL *language* extension (enabled in
 // shader source via `enable packed_4x8_integer_dot_product;`), not a

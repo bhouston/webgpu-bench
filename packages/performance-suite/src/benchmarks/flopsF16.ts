@@ -1,14 +1,14 @@
 import type { GpuContext } from '../gpu/context.ts';
-import { runFlopsBenchmark, type FlopsHarnessConfig } from './flopsCommon.ts';
+import { prepareFlopsBenchmark, type FlopsHarnessConfig } from './flopsCommon.ts';
 import { flopsF16ScalarWgsl } from '../shaders/flopsF16Scalar.ts';
 import { flopsF16Vec4Wgsl } from '../shaders/flopsF16Vec4.ts';
 import { flopsF16Mat4Wgsl } from '../shaders/flopsF16Mat4.ts';
 import { flopsF16MatvecWgsl } from '../shaders/flopsF16Matvec.ts';
-import type { BenchmarkResult } from '../types.ts';
+import type { PreparedBenchmark } from './common.ts';
 
 /** Raw fp16 FLOPS: eight independent scalar f16 FMA chains per thread, unrolled 4x. */
-export function benchmarkFlopsF16Scalar(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsF16Scalar(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-f16-scalar',
@@ -25,8 +25,8 @@ export function benchmarkFlopsF16Scalar(ctx: GpuContext, harness: FlopsHarnessCo
 }
 
 /** fp16 vec4 FLOPS: one f16 FMA chain on a vec4<f16> register (4 independent lanes). */
-export function benchmarkFlopsF16Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsF16Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-f16-vec4',
@@ -43,8 +43,8 @@ export function benchmarkFlopsF16Vec4(ctx: GpuContext, harness: FlopsHarnessConf
 }
 
 /** fp16 mat4 FLOPS: x = m*x + c chained with a mat4x4<f16>. */
-export function benchmarkFlopsF16Mat4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsF16Mat4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-f16-mat4',
@@ -61,8 +61,8 @@ export function benchmarkFlopsF16Mat4(ctx: GpuContext, harness: FlopsHarnessConf
 }
 
 /** fp16 register-resident matvec tile: 4x8 f16 weights in registers, two dot() calls per output row. */
-export function benchmarkFlopsF16Matvec(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<BenchmarkResult> {
-  return runFlopsBenchmark(
+export function prepareFlopsF16Matvec(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-f16-matvec',

@@ -46,7 +46,11 @@ export function DeviceInfoCard({ env, info }: { env: EnvironmentInfo | null; inf
             <Row
               label="OS"
               value={joinDefined([env.os, env.osVersion])}
-              hint={env.osSource === 'user-agent' ? 'from the UA string, which modern browsers freeze/generalize' : undefined}
+              hint={
+                env.osSource === 'user-agent'
+                  ? 'from the UA string, which modern browsers freeze/generalize'
+                  : undefined
+              }
             />
             <Row label="Browser" value={joinDefined([env.browser, env.browserVersion])} />
             <Row
@@ -55,7 +59,11 @@ export function DeviceInfoCard({ env, info }: { env: EnvironmentInfo | null; inf
                 [env.cpuArchitecture, env.cpuThreads !== undefined ? `${env.cpuThreads} logical threads` : undefined],
                 ', ',
               )}
-              hint={env.memoryGb !== undefined ? `~${env.memoryGb} GB RAM reported (coarse, capped by the browser)` : undefined}
+              hint={
+                env.memoryGb !== undefined
+                  ? `~${env.memoryGb} GB RAM reported (coarse, capped by the browser)`
+                  : undefined
+              }
             />
             <Row
               label="CPU / GPU (WebGL)"
@@ -73,7 +81,9 @@ export function DeviceInfoCard({ env, info }: { env: EnvironmentInfo | null; inf
         />
         {info ? (
           <div className="flex flex-wrap gap-2 pt-2">
-            <Badge variant={info.supportsF16 ? 'success' : 'outline'}>shader-f16 {info.supportsF16 ? 'yes' : 'no'}</Badge>
+            <Badge variant={info.supportsF16 ? 'success' : 'outline'}>
+              shader-f16 {info.supportsF16 ? 'yes' : 'no'}
+            </Badge>
             <Badge variant={info.supportsI8Dot ? 'success' : 'outline'}>
               packed_4x8_integer_dot_product {info.supportsI8Dot ? 'yes' : 'no'}
             </Badge>

@@ -11,7 +11,7 @@ export const Route = createRootRoute({
       {
         name: 'description',
         content:
-          'Measures WebGPU read/write memory bandwidth and fp32/fp16/int8 FLOPS (scalar, vec4-SIMD, mat4-SIMD, and packed int8 dot-product) — this device\'s raw compute and memory ceilings.',
+          "Measures WebGPU read/write memory bandwidth and fp32/fp16/int8 FLOPS (scalar, vec4-SIMD, mat4-SIMD, and packed int8 dot-product) — this device's raw compute and memory ceilings.",
       },
     ],
   }),

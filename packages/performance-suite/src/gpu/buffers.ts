@@ -17,7 +17,12 @@ export function createUploadedBuffer(
 }
 
 export function createStorageBuffer(device: GPUDevice, data: ArrayBufferView, label?: string): GPUBuffer {
-  return createUploadedBuffer(device, data, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST, label);
+  return createUploadedBuffer(
+    device,
+    data,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    label,
+  );
 }
 
 export function createUniformBuffer(device: GPUDevice, data: ArrayBufferView, label?: string): GPUBuffer {
