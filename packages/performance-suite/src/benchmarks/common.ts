@@ -1,6 +1,11 @@
 import type { GpuContext } from '../gpu/context.ts';
 import type { KernelHarness, MeasurementConfig, WorkKnob } from '../gpu/benchmarkRunner.ts';
-import type { BenchmarkCategory, BenchmarkResult } from '../types.ts';
+import type { BenchmarkCategory, BenchmarkResult, MetricDef } from '../types.ts';
+
+/** Shared metric definitions. `key` is what a JSON export would key the value by, stable across every benchmark that reports it. */
+export const FLOPS_METRIC: MetricDef = { key: 'flops', unit: 'FLOP', name: 'Floating-point ops' };
+export const OPS_METRIC: MetricDef = { key: 'ops', unit: 'OP', name: 'Operations' };
+export const BYTES_METRIC: MetricDef = { key: 'bytes', unit: 'B', name: 'Bandwidth' };
 
 /**
  * Compiles a shader module and builds a compute pipeline from it, watching
@@ -36,18 +41,9 @@ export async function createPipeline(
   return pipeline;
 }
 
-/** Total FLOPs and bytes moved for one op — each benchmark computes its own, since bandwidth kernels are ~all bytes and compute kernels are ~all FLOPs. */
-export interface ThroughputStats {
-  flops: number;
-  bytes: number;
-}
-
-export function flopsAndBandwidth(stats: ThroughputStats, perOpMs: number): { gflops: number; gbps: number } {
-  const seconds = perOpMs / 1000;
-  return {
-    gflops: stats.flops / seconds / 1e9,
-    gbps: stats.bytes / seconds / 1e9,
-  };
+/** `<metric.unit>/s`, from the amount of that unit moved/computed in one op and that op's best time. */
+export function metricPerSecond(amountPerOp: number, perOpMs: number): number {
+  return amountPerOp / (perOpMs / 1000);
 }
 
 /** Per-measurement knobs (`targetMs`, `targetDispatchMs`, `warmups`) shared by every benchmark. */
@@ -63,10 +59,10 @@ export interface BenchmarkMeta {
   category: BenchmarkCategory;
   rows: number;
   cols: number;
-  /** Bytes moved per op, for the bandwidth number. */
-  bytes: number;
-  /** FLOPs per op, for the throughput number. */
-  flops: number;
+  /** What this benchmark's throughput number counts. */
+  metric: MetricDef;
+  /** Amount of `metric.unit` moved/computed per op. */
+  amountPerOp: number;
 }
 
 /**
@@ -106,8 +102,8 @@ export function prepareKernelBenchmark(opts: PrepareKernelOptions): PreparedBenc
       category: opts.category,
       rows: opts.rows,
       cols: opts.cols,
-      bytes: opts.bytes,
-      flops: opts.flops,
+      metric: opts.metric,
+      amountPerOp: opts.amountPerOp,
     },
     metaAtWork: opts.metaAtWork,
     harness: {
@@ -159,6 +155,7 @@ export function rowFromMeta(meta: BenchmarkMeta): BenchmarkResult {
     innerIterations: 0,
     timesMs: [],
     throttledMs: [],
+    metric: meta.metric,
     timingMethod: 'cpu-wallclock',
   };
 }

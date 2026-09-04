@@ -11,9 +11,8 @@ test('every kernel runs clean', { timeout: 60_000 }, async () => {
   for (const [id, r] of byId) {
     expect(r.status, `${id}: ${r.message ?? ''}`).not.toBe('error');
     if (r.status === 'ok') {
-      const metric = r.category === 'bandwidth' ? r.gbps : r.gflops;
-      expect(Number.isFinite(metric), `${id} ${r.category}`).toBe(true);
-      expect(metric, `${id} ${r.category}`).toBeGreaterThan(0);
+      expect(Number.isFinite(r.metricValue), `${id} ${r.category}`).toBe(true);
+      expect(r.metricValue, `${id} ${r.category}`).toBeGreaterThan(0);
     }
   }
 });

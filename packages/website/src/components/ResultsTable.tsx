@@ -8,22 +8,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 function formatThroughput(value: number | undefined, unit: string): string {
   if (value === undefined || !Number.isFinite(value)) return '—';
-  // `value` is already in giga-units (GFLOP/s, GB/s); rescale to the base
-  // unit so humanizeUnit can re-derive the right SI prefix (G, T, ...).
-  return humanizeUnit(value * 1e9, { postfix: `${unit}/s`, unitSeparator: ' ', significantDigits: 3 });
+  return humanizeUnit(value, { postfix: `${unit}/s`, unitSeparator: ' ', significantDigits: 3 });
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  bandwidth: 'Bandwidth',
-  compute: 'Raw compute',
-};
+// Kernel labels were written when every compute benchmark was reported as
+// "FLOPS", so some (the int8/conversion kernels, now OPS_METRIC) still say
+// "FLOPS" in their label even though the metric column correctly shows
+// GOP/s for them. Rather than hand-editing every label string, strip the
+// stale unit word here and let the metric column's unit speak for itself.
+function displayName(label: string): string {
+  return label.replace(/\s*\b(?:FLOPS?|ops)\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+}
 
 /**
- * What goes in a value cell. Rows that can't produce a number say why in the
- * cell itself instead of a separate status column; rows still being sampled
- * show their best-so-far (dimmed) since the best only ever improves.
+ * What goes in the metric cell. Rows that can't produce a number say why in
+ * the cell itself instead of a separate status column; rows still being
+ * sampled show their best-so-far (dimmed) since the best only ever improves.
  */
-function ValueCell({ r, value, unit }: { r: BenchmarkResult; value: number | undefined; unit: string }) {
+function MetricCell({ r }: { r: BenchmarkResult }) {
   let text: string;
   let className = 'text-right tabular-nums';
   switch (r.status) {
@@ -36,11 +38,11 @@ function ValueCell({ r, value, unit }: { r: BenchmarkResult; value: number | und
       className += ' text-muted-foreground';
       break;
     case 'running':
-      text = value === undefined ? 'measuring…' : formatThroughput(value, unit);
+      text = r.metricValue === undefined ? 'measuring…' : formatThroughput(r.metricValue, r.metric.unit);
       className += ' text-muted-foreground';
       break;
     case 'ok':
-      text = formatThroughput(value, unit);
+      text = formatThroughput(r.metricValue, r.metric.unit);
       if (r.stopReason === 'throttled') className += ' text-warning';
       break;
   }
@@ -58,7 +60,7 @@ function KernelInfoButton({ r }: { r: BenchmarkResult }) {
     <>
       <button
         type="button"
-        aria-label={`About ${r.label}`}
+        aria-label={`About ${displayName(r.label)}`}
         className="text-muted-foreground hover:text-foreground"
         onClick={() => dialogRef.current?.showModal()}
       >
@@ -71,7 +73,7 @@ function KernelInfoButton({ r }: { r: BenchmarkResult }) {
           if (e.target === dialogRef.current) dialogRef.current?.close();
         }}
       >
-        <h3 className="mb-1 font-medium">{r.label}</h3>
+        <h3 className="mb-1 font-medium">{displayName(r.label)}</h3>
         {r.description ? <p className="mb-3 text-sm text-muted-foreground">{r.description}</p> : null}
         {r.source ? (
           <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-xs">
@@ -96,9 +98,7 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>Benchmark</TableHead>
-          <TableHead>Category</TableHead>
-          <TableHead className="text-right">Best Throughput</TableHead>
-          <TableHead className="text-right">Best Bandwidth</TableHead>
+          <TableHead className="text-right">Metrics</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -112,14 +112,12 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
             <TableRow key={r.id} className={isFastest ? 'bg-success/5' : undefined}>
               <TableCell className="font-medium">
                 <div className="flex items-center gap-1.5">
-                  <span>{r.label}</span>
+                  <span>{displayName(r.label)}</span>
                   <KernelInfoButton r={r} />
                 </div>
                 {note ? <div className="text-xs text-muted-foreground italic">{note}</div> : null}
               </TableCell>
-              <TableCell>{CATEGORY_LABEL[r.category] ?? r.category}</TableCell>
-              <ValueCell r={r} value={r.gflops} unit="FLOP" />
-              <ValueCell r={r} value={r.gbps} unit="B" />
+              <MetricCell r={r} />
             </TableRow>
           );
         })}

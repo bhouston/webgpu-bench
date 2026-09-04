@@ -40,8 +40,10 @@ import {
 } from './benchmarks/flopsConvert.ts';
 import {
   errorResult,
-  flopsAndBandwidth,
+  metricPerSecond,
   rowFromMeta,
+  FLOPS_METRIC,
+  BYTES_METRIC,
   type BenchmarkMeta,
   type HarnessConfig,
   type PreparedBenchmark,
@@ -57,6 +59,7 @@ export type {
   BenchmarkStatus,
   SamplingStopReason,
   SuiteProgressEvent,
+  MetricDef,
 } from './types.ts';
 export { computeStats } from './stats.ts';
 
@@ -151,8 +154,8 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
       category,
       rows,
       cols,
-      bytes: 0,
-      flops: 0,
+      metric: category === 'bandwidth' ? BYTES_METRIC : FLOPS_METRIC,
+      amountPerOp: 0,
     };
     let prepared: PreparedBenchmark;
     try {
@@ -252,11 +255,9 @@ function resultFromState(kernel: ScheduledKernel, state: SampleStateSnapshot): B
   row.stats = state.stats;
   row.stopReason = state.stopReason;
   if (state.stats) {
-    // Headline numbers come from the best run: every noise source only ever
+    // Headline number comes from the best run: every noise source only ever
     // slows a run down, so the minimum is the least-contaminated estimate.
-    const best = flopsAndBandwidth({ flops: meta.flops, bytes: meta.bytes }, state.stats.min);
-    row.gflops = best.gflops;
-    row.gbps = best.gbps;
+    row.metricValue = metricPerSecond(meta.amountPerOp, state.stats.min);
   }
   if (state.stopReason === 'throttled') {
     row.message = 'Device stayed thermally throttled through every cooldown; best run may understate it.';

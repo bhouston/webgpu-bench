@@ -7,6 +7,7 @@ import { flopsF32RsqrtWgsl } from '../shaders/flopsF32Rsqrt.ts';
 import { flopsF32PowWgsl } from '../shaders/flopsF32Pow.ts';
 import { flopsF32SincosWgsl } from '../shaders/flopsF32Sincos.ts';
 import { flopsF32LogWgsl } from '../shaders/flopsF32Log.ts';
+import { OPS_METRIC } from './common.ts';
 import type { PreparedBenchmark } from './common.ts';
 
 /**
@@ -47,6 +48,7 @@ export function prepareFlopsI32Div(ctx: GpuContext, harness: FlopsHarnessConfig 
       description:
         'Eight independent scalar i32 divide-add chains per thread, unrolled 4x — the int8-range scalar test with divide in place of multiply. Integer division is typically the slowest basic ALU op on a GPU.',
       wgsl: flopsI32DivWgsl,
+      metric: OPS_METRIC,
       flopsPerIteration: 64,
       defaultIterations: 256,
     },

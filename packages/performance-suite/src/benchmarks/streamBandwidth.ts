@@ -1,7 +1,13 @@
 import type { GpuContext } from '../gpu/context.ts';
 import type { GeneratedData } from '../data/generate.ts';
 import { createUniformBuffer, createStorageBuffer, createEmptyStorageBuffer } from '../gpu/buffers.ts';
-import { createPipeline, prepareKernelBenchmark, type HarnessConfig, type PreparedBenchmark } from './common.ts';
+import {
+  createPipeline,
+  prepareKernelBenchmark,
+  BYTES_METRIC,
+  type HarnessConfig,
+  type PreparedBenchmark,
+} from './common.ts';
 import { streamReadWgsl } from '../shaders/streamRead.ts';
 import { streamWriteWgsl } from '../shaders/streamWrite.ts';
 
@@ -41,9 +47,8 @@ export async function prepareReadBandwidth(
     ctx,
     rows: data.rows,
     cols: data.cols,
-    bytes: data.matrix.byteLength,
-    // One add per element read — negligible compute, reported for completeness.
-    flops: data.rows * data.cols,
+    metric: BYTES_METRIC,
+    amountPerOp: data.matrix.byteLength,
     workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
     pipeline,
     bindGroup,
@@ -84,9 +89,8 @@ export async function prepareWriteBandwidth(
     ctx,
     rows: data.rows,
     cols: data.cols,
-    bytes: data.matrix.byteLength,
-    // No arithmetic beyond forming the value to store.
-    flops: 0,
+    metric: BYTES_METRIC,
+    amountPerOp: data.matrix.byteLength,
     workgroupsPerIteration: [Math.ceil(data.rows / 64), 1, 1],
     pipeline,
     bindGroup,

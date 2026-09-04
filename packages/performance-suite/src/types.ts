@@ -1,7 +1,7 @@
 /** Summary statistics computed over the kept (non-throttled) timed measurements. */
 export interface Stats {
   mean: number;
-  /** The best (fastest) kept measurement — the headline number, see `BenchmarkResult.gflops`. */
+  /** The best (fastest) kept measurement — the headline number, see `BenchmarkResult.metricValue`. */
   min: number;
   max: number;
   median: number;
@@ -26,6 +26,19 @@ export type TimingMethod = 'gpu-timestamp' | 'cpu-wallclock';
 export type BenchmarkCategory = 'bandwidth' | 'compute';
 
 export type BenchmarkStatus = 'running' | 'ok' | 'skipped' | 'error';
+
+/**
+ * Identifies what a benchmark's throughput number counts. `key` is a
+ * JSON-safe id shared by every benchmark that measures the same kind of
+ * thing (so it's stable to key off, not unique per-benchmark); `unit` is
+ * the short symbol shown as `<unit>/s` (FLOP, OP, B); `name` is a short
+ * friendly label for display (e.g. in a tooltip).
+ */
+export interface MetricDef {
+  key: string;
+  unit: string;
+  name: string;
+}
 
 /**
  * One row of the results table. `runSuite` yields a fresh object for a given
@@ -64,10 +77,10 @@ export interface BenchmarkResult {
   stats?: Stats;
   /** Set for `ok` rows: see `SamplingStopReason`. */
   stopReason?: SamplingStopReason;
-  /** Peak GFLOP/s throughput, computed from the best run (`stats.min`). */
-  gflops?: number;
-  /** Peak memory bandwidth in GB/s, computed from the best run (`stats.min`). */
-  gbps?: number;
+  /** What `metricValue` counts. Set from the start, before any measurement lands. */
+  metric: MetricDef;
+  /** Peak `<metric.unit>/s`, computed from the best run (`stats.min`). */
+  metricValue?: number;
   timingMethod: TimingMethod;
 }
 
