@@ -3,8 +3,8 @@
  * but each step is `xf = f32(xi) * a + b; xi = i32(xf)`: two conversions
  * plus the same FMA as the fp32 scalar test, so the delta against that test
  * isolates conversion cost. `a` < 1 keeps the round-tripped integer bounded.
- * 128 ops (32 x [f32-convert, multiply, add, i32-convert]) per loop
- * iteration.
+ * Counted as 2 ops per lane step (one convert each way; the FMA is not
+ * counted): 64 ops per loop iteration.
  */
 export const flopsI32F32ConvertWgsl = /* wgsl */ `
 struct Params {

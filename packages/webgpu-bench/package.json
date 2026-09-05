@@ -1,6 +1,6 @@
 {
   "name": "webgpu-bench",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Benchmark suite for WebGPU's raw ceilings: memory bandwidth and fp32/fp16/int8 FLOPS.",
   "keywords": ["webgpu", "benchmark", "gpu", "flops", "bandwidth", "profiler", "wgsl", "vgpu"],
   "homepage": "https://github.com/bhouston/webgpu-profiler",

@@ -21,15 +21,15 @@ export function prepareFlopsF16Scalar(ctx: GpuContext, harness: FlopsHarnessConf
   );
 }
 
-/** fp16 vec4 FLOPS: one f16 FMA chain on a vec4<f16> register (4 independent lanes). */
+/** fp16 vec4 FLOPS: eight independent vec4<f16> FMA chains, unrolled 4x (same shape as scalar). */
 export function prepareFlopsF16Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
   return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-f16-vec4',
       wgsl: flopsF16Vec4Wgsl,
-      flopsPerIteration: 8,
-      defaultIterations: 1024,
+      flopsPerIteration: 256,
+      defaultIterations: 256,
       requiresF16: true,
     },
     harness,

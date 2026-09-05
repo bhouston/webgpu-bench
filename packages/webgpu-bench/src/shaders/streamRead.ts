@@ -1,32 +1,30 @@
 /**
- * Read-bandwidth probe: each thread streams a run of `vec4<f32>` values out
- * of a large storage buffer and folds them together with plain addition (no
- * second buffer, no multiply) — the cheapest possible "prove you read it"
- * op — then writes a single scalar. Reads dominate; writes are negligible
- * (one f32 per thread vs. `cols4` vec4s read), so throughput here is close
- * to the device's peak storage-buffer read bandwidth.
+ * Read-bandwidth probe. Grid-stride loop: on step `i` every thread `t` loads
+ * `data[t + i * threads]`, so adjacent threads in a SIMD group always touch
+ * adjacent `vec4<f32>`s (fully coalesced) and the loads within a thread are
+ * independent (the compiler can keep several in flight). Folds with plain
+ * addition — the cheapest "prove you read it" op — and writes one scalar per
+ * thread, so reads dominate. The previous one-row-per-thread layout had
+ * adjacent threads 16 KB apart and only 4096 threads in total: fine on an
+ * M3, badly under-reports on a wide discrete GPU.
  */
 export const streamReadWgsl = /* wgsl */ `
 struct Params {
-  rows: u32,
-  cols4: u32,
+  count: u32,
+  threads: u32,
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage, read> data: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> out: array<f32>;
 
-@compute @workgroup_size(64)
+@compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let row = gid.x;
-  if (row >= params.rows) {
-    return;
-  }
+  let t = gid.x;
   var sum: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-  let base = row * params.cols4;
-  for (var c: u32 = 0u; c < params.cols4; c = c + 1u) {
-    sum = sum + data[base + c];
+  for (var i: u32 = t; i < params.count; i = i + params.threads) {
+    sum = sum + data[i];
   }
-  out[row] = sum.x + sum.y + sum.z + sum.w;
+  out[t] = sum.x + sum.y + sum.z + sum.w;
 }
 `;

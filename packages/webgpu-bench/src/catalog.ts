@@ -26,7 +26,6 @@ import { flopsF32LogWgsl } from './shaders/flopsF32Log.ts';
 import { flopsU32PackUnpackWgsl } from './shaders/flopsU32PackUnpack.ts';
 import { flopsI32F32ConvertWgsl } from './shaders/flopsI32F32Convert.ts';
 import { flopsF32F16ConvertWgsl } from './shaders/flopsF32F16Convert.ts';
-import { flopsI32F16ConvertWgsl } from './shaders/flopsI32F16Convert.ts';
 
 /**
  * Identity of one benchmark, known without touching the GPU: label,
@@ -64,7 +63,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'read-bandwidth',
     label: 'Read bandwidth',
     description:
-      'One thread per row; streams a large buffer in via vec4<f32> loads and addition only, writes one scalar. Read-bandwidth-bound.',
+      'Coalesced grid-stride loop: adjacent threads load adjacent vec4<f32>s from a large buffer, folded with addition only, one scalar written per thread. Read-bandwidth-bound.',
     source: streamReadWgsl,
     category: 'bandwidth',
     metric: BYTES_METRIC,
@@ -73,7 +72,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'write-bandwidth',
     label: 'Write bandwidth',
     description:
-      'One thread per row; stores computed vec4<f32> values into a large buffer with no buffer reads. Write-bandwidth-bound.',
+      'Coalesced grid-stride loop: adjacent threads store adjacent computed vec4<f32>s into a large buffer with no buffer reads. Write-bandwidth-bound.',
     source: streamWriteWgsl,
     category: 'bandwidth',
     metric: BYTES_METRIC,
@@ -91,7 +90,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'flops-f32-vec4',
     label: 'fp32 vec4 FLOPS',
     description:
-      'A single FMA chain held in a vec4<f32> register. On scalar-SIMT GPUs (Apple, NVIDIA, AMD) this compiles to 4 independent scalar FMAs per step, so it measures how well 4-wide instruction-level parallelism hides latency, not a wider ALU.',
+      'Eight independent FMA chains held in vec4<f32> registers, unrolled 4x: the fp32 scalar test with every chain 4 lanes wide. On scalar-SIMT GPUs (Apple, NVIDIA, AMD) each step is 4 scalar FMAs, so this should match the scalar number; a gap means vector ops cost extra.',
     source: flopsF32Vec4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
@@ -127,7 +126,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'flops-f16-vec4',
     label: 'fp16 vec4 FLOPS',
     description:
-      'Same single FMA chain as the fp32 vec4 test, but held in a vec4<f16> register: 4 independent half-precision lanes per step. Only GPUs with packed-half ALUs run this faster than fp32.',
+      'Same eight 4x-unrolled vec4 FMA chains as the fp32 vec4 test, but in vec4<f16>. Only GPUs with packed-half ALUs run this faster than fp32.',
     source: flopsF16Vec4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
@@ -162,8 +161,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
   {
     id: 'flops-i8-vec4',
     label: 'int8-range vec4 FLOPS',
-    description:
-      'Same single multiply-add chain as the fp32 vec4 test, but held in a vec4<i32> register: 4 independent integer lanes per step.',
+    description: 'Same eight 4x-unrolled vec4 multiply-add chains as the fp32 vec4 test, but in vec4<i32>.',
     source: flopsI8Vec4Wgsl,
     category: 'compute',
     metric: OPS_METRIC,
@@ -199,7 +197,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'flops-i8-dp4a',
     label: 'int8 dot4I8Packed FLOPS',
     description:
-      "One thread per lane, accumulating dot4I8Packed(a, b) — the packed_4x8_integer_dot_product extension's 4-wide int8 dot-product instruction — in a tight loop to measure its peak throughput in isolation.",
+      "Eight independent accumulators per thread, each summing dot4I8Packed(a, b) — the packed_4x8_integer_dot_product extension's 4-wide int8 dot-product instruction — in a tight loop to measure its peak throughput in isolation.",
     source: flopsI8Dp4aWgsl,
     category: 'compute',
     metric: OPS_METRIC,
@@ -208,7 +206,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'flops-f32-div',
     label: 'fp32 div FLOPS',
     description:
-      'Eight independent scalar f32 divide-add chains per thread, unrolled 4x — the fp32 scalar FMA test with divide in place of multiply, so the gap between the two isolates the cost of division.',
+      'Eight independent scalar f32 chains of x = a / x + b per thread, unrolled 4x — the fp32 scalar FMA test with divide in place of multiply, so the gap between the two isolates the cost of division. The loop-carried value is the divisor, so the compiler cannot hoist a reciprocal and turn it back into an FMA.',
     source: flopsF32DivWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
@@ -217,7 +215,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     id: 'flops-i32-div',
     label: 'i32 div FLOPS',
     description:
-      'Eight independent scalar i32 divide-add chains per thread, unrolled 4x — the int8-range scalar test with divide in place of multiply. Integer division is typically the slowest basic ALU op on a GPU.',
+      'Eight independent scalar i32 chains of x = a / x + b per thread, unrolled 4x — the int8-range scalar test with divide in place of multiply, divisor loop-carried. Integer division is typically the slowest basic ALU op on a GPU.',
     source: flopsI32DivWgsl,
     category: 'compute',
     metric: OPS_METRIC,
@@ -269,37 +267,28 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
   },
   {
     id: 'flops-u32-packunpack',
-    label: 'u32 byte pack/unpack ops',
+    label: 'u32 byte pack/unpack',
     description:
-      'Eight independent u32 lanes, each step unpacking 4 bytes via shift+mask, incrementing them, and repacking the same way — no pack4x8 (or unpack4x8) builtin, just the bit-twiddling those compile to. 25 ops/lane/step, no unrolling.',
+      'Eight independent u32 lanes, unrolled 4x, each step unpacking 4 bytes via shift+mask, incrementing them, and repacking — no pack4x8 (or unpack4x8) builtin, just the bit-twiddling those compile to. Counted as 2 ops per lane step (one unpack + one pack of a whole u32), since the compiler folds the individual shifts and masks.',
     source: flopsU32PackUnpackWgsl,
     category: 'compute',
     metric: OPS_METRIC,
   },
   {
     id: 'flops-i32-f32-convert',
-    label: 'i32<->f32 convert FLOPS',
+    label: 'i32<->f32 convert',
     description:
-      'Eight independent chains per thread, unrolled 4x: xi -> f32(xi)*a+b -> back to i32 each step. Same FMA as the fp32 scalar test plus a convert on each side, so the gap against that test isolates int<->float conversion cost.',
+      'Eight independent chains per thread, unrolled 4x: xi -> f32(xi)*a+b -> back to i32 each step. Counted as 2 ops per lane step (one convert each way; the FMA is not counted).',
     source: flopsI32F32ConvertWgsl,
     category: 'compute',
     metric: OPS_METRIC,
   },
   {
     id: 'flops-f32-f16-convert',
-    label: 'f32<->f16 convert FLOPS',
+    label: 'f32<->f16 convert',
     description:
-      'Eight independent vec2<f32> chains per thread, unrolled 4x: pack2x16float then unpack2x16float (round-trips through fp16 bits) plus a vec2 FMA to keep the chain moving. Unlike flops-f16-*, this needs no shader-f16 device feature — it measures the conversion, not f16 compute.',
+      'Eight independent vec2<f32> chains per thread, unrolled 4x: pack2x16float then unpack2x16float (round-trips through fp16 bits) plus a vec2 FMA to keep the chain moving. Counted as 2 ops per lane per step (one convert each way; the FMA is not counted). Unlike flops-f16-*, this needs no shader-f16 device feature — it measures the conversion, not f16 compute.',
     source: flopsF32F16ConvertWgsl,
-    category: 'compute',
-    metric: OPS_METRIC,
-  },
-  {
-    id: 'flops-i32-f16-convert',
-    label: 'i32<->f16 convert FLOPS',
-    description:
-      'Eight independent i32 chains per thread, unrolled 4x: xi -> f32 -> pack2x16float -> unpack2x16float -> f32*a+b -> i32. There is no native int<->f16 conversion, so this is what the real path (through f32) costs.',
-    source: flopsI32F16ConvertWgsl,
     category: 'compute',
     metric: OPS_METRIC,
   },

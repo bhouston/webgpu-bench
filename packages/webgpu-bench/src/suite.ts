@@ -36,7 +36,6 @@ import {
   prepareFlopsU32PackUnpack,
   prepareFlopsI32F32Convert,
   prepareFlopsF32F16Convert,
-  prepareFlopsI32F16Convert,
 } from './benchmarks/flopsConvert.ts';
 import {
   errorResult,
@@ -135,7 +134,6 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
     compute('flops-u32-packunpack', () => prepareFlopsU32PackUnpack(ctx, flopsHarness)),
     compute('flops-i32-f32-convert', () => prepareFlopsI32F32Convert(ctx, flopsHarness)),
     compute('flops-f32-f16-convert', () => prepareFlopsF32F16Convert(ctx, flopsHarness)),
-    compute('flops-i32-f16-convert', () => prepareFlopsI32F16Convert(ctx, flopsHarness)),
   ];
 
   // Phase 1: build every benchmark's GPU resources up front. Rows that can't

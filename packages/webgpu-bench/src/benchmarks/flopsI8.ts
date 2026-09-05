@@ -22,15 +22,15 @@ export function prepareFlopsI8Scalar(ctx: GpuContext, harness: FlopsHarnessConfi
   );
 }
 
-/** int8-range vec4 FLOPS: one integer FMA chain on a vec4<i32> register (4 independent lanes). */
+/** int8-range vec4 FLOPS: eight independent vec4<i32> multiply-add chains, unrolled 4x (same shape as scalar). */
 export function prepareFlopsI8Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
   return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-vec4',
       wgsl: flopsI8Vec4Wgsl,
-      flopsPerIteration: 8,
-      defaultIterations: 1024,
+      flopsPerIteration: 256,
+      defaultIterations: 256,
     },
     harness,
   );
@@ -82,15 +82,15 @@ export function prepareFlopsI8MatvecDp4a(
   );
 }
 
-/** int8 packed-dot-product FLOPS: dot4I8Packed from the packed_4x8_integer_dot_product extension, run in a tight accumulation loop. */
+/** int8 packed-dot-product FLOPS: dot4I8Packed from the packed_4x8_integer_dot_product extension, run in a tight accumulation loop over eight independent accumulators. */
 export function prepareFlopsI8Dp4a(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
   return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-i8-dp4a',
       wgsl: flopsI8Dp4aWgsl,
-      flopsPerIteration: 8,
-      defaultIterations: 1024,
+      flopsPerIteration: 64,
+      defaultIterations: 256,
       requiresI8Dot: true,
     },
     harness,

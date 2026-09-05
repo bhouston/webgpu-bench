@@ -3,9 +3,9 @@
  * `unpack2x16float` builtins (round each of a vec2<f32>'s lanes to fp16 and
  * back) — these don't need the `shader-f16` device feature, unlike the
  * flops-f16-* kernels which compute *in* f16. Eight independent vec2<f32>
- * lanes; each step: pack (1 op) + unpack (1 op) + a vec2 FMA to keep the
- * chain moving and bounded (4 ops: 2 muls + 2 adds) = 6 ops/lane/step,
- * unrolled 4x. 192 ops per loop iteration.
+ * chains, unrolled 4x; each step packs, unpacks, then a vec2 FMA keeps the
+ * chain moving and bounded. Counted as 2 ops per lane (one f32 -> f16
+ * convert and one back; the FMA is not counted): 128 ops per loop iteration.
  */
 export const flopsF32F16ConvertWgsl = /* wgsl */ `
 struct Params {

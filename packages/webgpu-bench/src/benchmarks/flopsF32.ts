@@ -20,15 +20,15 @@ export function prepareFlopsF32Scalar(ctx: GpuContext, harness: FlopsHarnessConf
   );
 }
 
-/** fp32 vec4 FLOPS: one FMA chain on a vec4<f32> register (4 independent lanes). */
+/** fp32 vec4 FLOPS: eight independent vec4<f32> FMA chains, unrolled 4x (same shape as scalar). */
 export function prepareFlopsF32Vec4(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
   return prepareFlopsBenchmark(
     ctx,
     {
       id: 'flops-f32-vec4',
       wgsl: flopsF32Vec4Wgsl,
-      flopsPerIteration: 8,
-      defaultIterations: 1024,
+      flopsPerIteration: 256,
+      defaultIterations: 256,
     },
     harness,
   );

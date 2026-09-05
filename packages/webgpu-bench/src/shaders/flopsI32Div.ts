@@ -1,8 +1,10 @@
 /**
  * i32 divide-add ops probe. Same shape as {@link flopsI8ScalarWgsl} (eight
  * independent chains, unrolled 4x) but with the multiply replaced by integer
- * division: `x = x / a + b`. `a` is always >= 2 so each step shrinks `x`
- * (bounded, no overflow) and never divides by zero. 64 ops (32 divides + 32
+ * division: `x = a / x + b`. The divisor is the loop-carried value so the
+ * division can't be strength-reduced against a loop-invariant `a` (see
+ * flopsF32Div.ts). `x >= b >= 5` from the first step, so it never divides by
+ * zero and stays within `[b, a / b + b]`. 64 ops (32 divides + 32
  * adds) per loop iteration, same MAC-as-2 convention as the other scalar
  * probes.
  */
@@ -21,7 +23,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (idx >= params.threads) {
     return;
   }
-  let a: i32 = 2 + i32(idx & 3u);
+  let a: i32 = 100003 + i32(idx & 255u) * 7;
   let b: i32 = 5 + i32(idx & 7u);
   var x0: i32 = i32(idx & 255u) + 1000;
   var x1: i32 = i32(idx & 255u) + 2000;
@@ -32,38 +34,38 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   var x6: i32 = i32(idx & 255u) + 7000;
   var x7: i32 = i32(idx & 255u) + 8000;
   for (var i: u32 = 0u; i < params.iterations; i = i + 1u) {
-    x0 = x0 / a + b;
-    x1 = x1 / a + b;
-    x2 = x2 / a + b;
-    x3 = x3 / a + b;
-    x4 = x4 / a + b;
-    x5 = x5 / a + b;
-    x6 = x6 / a + b;
-    x7 = x7 / a + b;
-    x0 = x0 / a + b;
-    x1 = x1 / a + b;
-    x2 = x2 / a + b;
-    x3 = x3 / a + b;
-    x4 = x4 / a + b;
-    x5 = x5 / a + b;
-    x6 = x6 / a + b;
-    x7 = x7 / a + b;
-    x0 = x0 / a + b;
-    x1 = x1 / a + b;
-    x2 = x2 / a + b;
-    x3 = x3 / a + b;
-    x4 = x4 / a + b;
-    x5 = x5 / a + b;
-    x6 = x6 / a + b;
-    x7 = x7 / a + b;
-    x0 = x0 / a + b;
-    x1 = x1 / a + b;
-    x2 = x2 / a + b;
-    x3 = x3 / a + b;
-    x4 = x4 / a + b;
-    x5 = x5 / a + b;
-    x6 = x6 / a + b;
-    x7 = x7 / a + b;
+    x0 = a / x0 + b;
+    x1 = a / x1 + b;
+    x2 = a / x2 + b;
+    x3 = a / x3 + b;
+    x4 = a / x4 + b;
+    x5 = a / x5 + b;
+    x6 = a / x6 + b;
+    x7 = a / x7 + b;
+    x0 = a / x0 + b;
+    x1 = a / x1 + b;
+    x2 = a / x2 + b;
+    x3 = a / x3 + b;
+    x4 = a / x4 + b;
+    x5 = a / x5 + b;
+    x6 = a / x6 + b;
+    x7 = a / x7 + b;
+    x0 = a / x0 + b;
+    x1 = a / x1 + b;
+    x2 = a / x2 + b;
+    x3 = a / x3 + b;
+    x4 = a / x4 + b;
+    x5 = a / x5 + b;
+    x6 = a / x6 + b;
+    x7 = a / x7 + b;
+    x0 = a / x0 + b;
+    x1 = a / x1 + b;
+    x2 = a / x2 + b;
+    x3 = a / x3 + b;
+    x4 = a / x4 + b;
+    x5 = a / x5 + b;
+    x6 = a / x6 + b;
+    x7 = a / x7 + b;
   }
   out[idx] = f32(x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7);
 }
