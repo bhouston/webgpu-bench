@@ -227,7 +227,15 @@ export async function runSampling(
       // the cool GPU every time and leave the rest measuring a warm one.
       const active = shuffle([...states.values()].filter(isActive));
       if (active.length === 0) break;
-      onProgress({ type: 'round', round, active: active.length });
+      // Typical remaining measurements per still-active benchmark: assumes it
+      // converges around minRounds + stableRounds, like any other. Floored at
+      // 1 so a benchmark that's run longer than typical still counts as
+      // "still going" rather than going negative.
+      const estimatedRemainingUnits = active.reduce(
+        (sum, s) => sum + Math.max(cfg.minRounds + cfg.stableRounds - s.timesMs.length, 1),
+        0,
+      );
+      onProgress({ type: 'round', round, active: active.length, estimatedRemainingUnits });
 
       const roundStates: SampleState[] = [];
       const roundThrottled: boolean[] = [];

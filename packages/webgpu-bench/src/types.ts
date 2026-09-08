@@ -85,7 +85,21 @@ export interface BenchmarkResult {
 
 /** Suite-level progress events (round boundaries and thermal cooldown pauses). */
 export type SuiteProgressEvent =
-  | { type: 'round'; round: number; active: number }
+  | {
+      type: 'round';
+      round: number;
+      active: number;
+      /**
+       * Estimated measurements still needed across every active benchmark:
+       * each still-active benchmark contributes `max(minRounds + stableRounds
+       * - <its kept measurements so far>, 1)`. Recomputed fresh every round
+       * from each benchmark's own progress (not a fixed total), so it shrinks
+       * as benchmarks converge and never has to be corrected upward the way a
+       * naive "total rounds" guess does — a UI can turn it into an ETA via
+       * `elapsedMs / (unitsCompleted so far)`.
+       */
+      estimatedRemainingUnits: number;
+    }
   | { type: 'cooldown'; attempt: number; maxAttempts: number; ms: number; throttledIds: string[] }
   | { type: 'throttle-abort'; throttledIds: string[] };
 
