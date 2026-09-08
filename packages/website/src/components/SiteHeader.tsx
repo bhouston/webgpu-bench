@@ -20,7 +20,7 @@ export function SiteHeader() {
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="icon" asChild>
-            <a href="https://github.com/bhouston/webgpu-profiler" aria-label="GitHub" title="GitHub">
+            <a href="https://github.com/bhouston/webgpu-bench" aria-label="GitHub" title="GitHub">
               <GithubIcon />
             </a>
           </Button>

@@ -1,4 +1,9 @@
-# webgpu-profiler
+# webgpu-bench
+
+[![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
+[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
+[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://webgpu-bench.ben3d.ca)
 
 A focused benchmark suite for the raw ceilings of a WebGPU device: memory **bandwidth** (read and write)
 and **FLOPS** (fp32, fp16, and int8, at scalar / vec4 / mat4 / register-resident-matvec granularity), run head to head in the
