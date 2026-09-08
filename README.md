@@ -9,7 +9,7 @@ A focused benchmark suite for the raw ceilings of a WebGPU device: memory **band
 and **FLOPS** (fp32, fp16, and int8, at scalar / vec4 / mat4 / register-resident-matvec granularity), run head to head in the
 browser, built on [`vgpu`](https://github.com/vercel-labs/vgpu).
 
-Run it live: click **Run benchmark suite** on the website (`packages/website`) and watch results stream
+Run it live: click **Run benchmark suite** on [the demo website](https://webgpu-bench.ben3d.ca) and watch results stream
 into a table as each kernel finishes.
 
 Built to power the GPU benchmarking behind [Web3D Survey](https://web3dsurvey.com/benchmark).
@@ -159,11 +159,6 @@ Requires a WebGPU-capable browser (recent Chrome/Edge desktop). `f16`/`int8`-dot
 themselves as "skipped" with an explanation when the browser/GPU doesn't support the underlying WebGPU
 feature, rather than failing the whole run.
 
-## Deployment
-
-`packages/website/Dockerfile` builds the whole workspace and serves the TanStack Start (Nitro) production
-server on port 3500. `.github/workflows/deploy.yml` deploys it to Cloud Run on push to `main` (reuses the
-generic `deploy-service.yml` workflow).
 
 ## Author
 
