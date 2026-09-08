@@ -23,6 +23,12 @@ import { flopsF32RsqrtWgsl } from './shaders/flopsF32Rsqrt.ts';
 import { flopsF32PowWgsl } from './shaders/flopsF32Pow.ts';
 import { flopsF32SincosWgsl } from './shaders/flopsF32Sincos.ts';
 import { flopsF32LogWgsl } from './shaders/flopsF32Log.ts';
+import { flopsF16DivWgsl } from './shaders/flopsF16Div.ts';
+import { flopsF16SqrtWgsl } from './shaders/flopsF16Sqrt.ts';
+import { flopsF16RsqrtWgsl } from './shaders/flopsF16Rsqrt.ts';
+import { flopsF16PowWgsl } from './shaders/flopsF16Pow.ts';
+import { flopsF16SincosWgsl } from './shaders/flopsF16Sincos.ts';
+import { flopsF16LogWgsl } from './shaders/flopsF16Log.ts';
 import { flopsU32PackUnpackWgsl } from './shaders/flopsU32PackUnpack.ts';
 import { flopsI32F32ConvertWgsl } from './shaders/flopsI32F32Convert.ts';
 import { flopsF32F16ConvertWgsl } from './shaders/flopsF32F16Convert.ts';
@@ -262,6 +268,60 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     description:
       'Eight independent scalar f32 ln-add chains per thread, unrolled 4x. log(x) is usually log2(x) * ln(2) under the hood, so expect throughput close to a raw log2 special-function call.',
     source: flopsF32LogWgsl,
+    category: 'compute',
+    metric: FLOPS_METRIC,
+  },
+  {
+    id: 'flops-f16-div',
+    label: 'fp16 div FLOPS',
+    description:
+      'Eight independent scalar f16 chains of x = a / x + b per thread, unrolled 4x — the fp16 scalar FMA test with divide in place of multiply, so the gap against flops-f16-scalar isolates the cost of division in half precision. The loop-carried value is the divisor, so the compiler cannot hoist a reciprocal and turn it back into an FMA.',
+    source: flopsF16DivWgsl,
+    category: 'compute',
+    metric: FLOPS_METRIC,
+  },
+  {
+    id: 'flops-f16-sqrt',
+    label: 'fp16 sqrt FLOPS',
+    description:
+      'Eight independent scalar f16 sqrt-add chains per thread, unrolled 4x. Same shape as flops-f32-sqrt but entirely in half precision.',
+    source: flopsF16SqrtWgsl,
+    category: 'compute',
+    metric: FLOPS_METRIC,
+  },
+  {
+    id: 'flops-f16-rsqrt',
+    label: 'fp16 rsqrt FLOPS',
+    description:
+      'Eight independent scalar f16 inverseSqrt-add chains per thread, unrolled 4x. Same shape as flops-f32-rsqrt but entirely in half precision; compare against flops-f16-sqrt to see the gap.',
+    source: flopsF16RsqrtWgsl,
+    category: 'compute',
+    metric: FLOPS_METRIC,
+  },
+  {
+    id: 'flops-f16-pow',
+    label: 'fp16 pow FLOPS',
+    description:
+      'Eight independent scalar f16 pow-add chains per thread, unrolled 4x. Same shape as flops-f32-pow but entirely in half precision.',
+    source: flopsF16PowWgsl,
+    category: 'compute',
+    metric: FLOPS_METRIC,
+  },
+  {
+    id: 'flops-f16-sincos',
+    label: 'fp16 sin/cos FLOPS',
+    description:
+      'Eight independent scalar f16 cos(sin(x)) chains per thread, unrolled 4x. Same shape as flops-f32-sincos but entirely in half precision.',
+    source: flopsF16SincosWgsl,
+    category: 'compute',
+    metric: FLOPS_METRIC,
+  },
+  {
+    id: 'flops-f16-log',
+    label: 'fp16 ln FLOPS',
+    description:
+      'Eight independent scalar f16 ln-add chains per thread, unrolled 4x. Same shape as flops-f32-log but entirely in half precision.',
+    source: flopsF16LogWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
   },

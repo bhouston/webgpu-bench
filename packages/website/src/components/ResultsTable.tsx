@@ -87,6 +87,10 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
     Number.POSITIVE_INFINITY,
   );
 
+  const sorted = [...results].sort((a, b) =>
+    (CATALOG_BY_ID.get(a.id)?.label ?? '').localeCompare(CATALOG_BY_ID.get(b.id)?.label ?? ''),
+  );
+
   return (
     <Table>
       <TableHeader>
@@ -96,7 +100,7 @@ export function ResultsTable({ results }: { results: BenchmarkResult[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {results.map((r) => {
+        {sorted.map((r) => {
           const info = CATALOG_BY_ID.get(r.id);
           if (!info) return null;
           const isFastest = r.status === 'ok' && r.stats?.min === fastestBest;

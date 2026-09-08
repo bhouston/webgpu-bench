@@ -7,6 +7,12 @@ import { flopsF32RsqrtWgsl } from '../shaders/flopsF32Rsqrt.ts';
 import { flopsF32PowWgsl } from '../shaders/flopsF32Pow.ts';
 import { flopsF32SincosWgsl } from '../shaders/flopsF32Sincos.ts';
 import { flopsF32LogWgsl } from '../shaders/flopsF32Log.ts';
+import { flopsF16DivWgsl } from '../shaders/flopsF16Div.ts';
+import { flopsF16SqrtWgsl } from '../shaders/flopsF16Sqrt.ts';
+import { flopsF16RsqrtWgsl } from '../shaders/flopsF16Rsqrt.ts';
+import { flopsF16PowWgsl } from '../shaders/flopsF16Pow.ts';
+import { flopsF16SincosWgsl } from '../shaders/flopsF16Sincos.ts';
+import { flopsF16LogWgsl } from '../shaders/flopsF16Log.ts';
 import type { PreparedBenchmark } from './common.ts';
 
 /**
@@ -113,6 +119,96 @@ export function prepareFlopsF32Log(ctx: GpuContext, harness: FlopsHarnessConfig 
       wgsl: flopsF32LogWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
+    },
+    harness,
+  );
+}
+
+/** fp16 divide-add ops: same shape as the fp32 divide test, in half precision. */
+export function prepareFlopsF16Div(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
+    ctx,
+    {
+      id: 'flops-f16-div',
+      wgsl: flopsF16DivWgsl,
+      flopsPerIteration: 64,
+      defaultIterations: 256,
+      requiresF16: true,
+    },
+    harness,
+  );
+}
+
+/** fp16 sqrt-add ops: same shape as the fp32 sqrt test, in half precision. */
+export function prepareFlopsF16Sqrt(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
+    ctx,
+    {
+      id: 'flops-f16-sqrt',
+      wgsl: flopsF16SqrtWgsl,
+      flopsPerIteration: 64,
+      defaultIterations: 256,
+      requiresF16: true,
+    },
+    harness,
+  );
+}
+
+/** fp16 rsqrt-add ops: same shape as the fp32 rsqrt test, in half precision. */
+export function prepareFlopsF16Rsqrt(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
+    ctx,
+    {
+      id: 'flops-f16-rsqrt',
+      wgsl: flopsF16RsqrtWgsl,
+      flopsPerIteration: 64,
+      defaultIterations: 256,
+      requiresF16: true,
+    },
+    harness,
+  );
+}
+
+/** fp16 pow-add ops: same shape as the fp32 pow test, in half precision. */
+export function prepareFlopsF16Pow(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
+    ctx,
+    {
+      id: 'flops-f16-pow',
+      wgsl: flopsF16PowWgsl,
+      flopsPerIteration: 64,
+      defaultIterations: 128,
+      requiresF16: true,
+    },
+    harness,
+  );
+}
+
+/** fp16 sin(cos(x)) ops: same shape as the fp32 sincos test, in half precision. */
+export function prepareFlopsF16Sincos(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
+    ctx,
+    {
+      id: 'flops-f16-sincos',
+      wgsl: flopsF16SincosWgsl,
+      flopsPerIteration: 64,
+      defaultIterations: 128,
+      requiresF16: true,
+    },
+    harness,
+  );
+}
+
+/** fp16 ln-add ops: same shape as the fp32 log test, in half precision. */
+export function prepareFlopsF16Log(ctx: GpuContext, harness: FlopsHarnessConfig = {}): Promise<PreparedBenchmark> {
+  return prepareFlopsBenchmark(
+    ctx,
+    {
+      id: 'flops-f16-log',
+      wgsl: flopsF16LogWgsl,
+      flopsPerIteration: 64,
+      defaultIterations: 256,
+      requiresF16: true,
     },
     harness,
   );
