@@ -196,6 +196,26 @@ describe('runSampling', () => {
     expect(String((results.get('zero')!.error as Error).message)).toMatch(/did no work/);
   });
 
+  it('estimates remaining units from each benchmark\'s own progress, shrinking as benchmarks converge', async () => {
+    const events: SuiteProgressEvent[] = [];
+    // cfg: minRounds=3, stableRounds=2 (defaults) → converges once the best hasn't improved over 2 kept samples.
+    const quick = scripted('quick', [10, 10, 10]);
+    const slow = scripted('slow', [20, 18, 16, 16, 16]);
+    await runSampling([quick, slow], { ...cfg, onProgress: (e) => events.push(e) });
+    const rounds = events.filter((e): e is Extract<SuiteProgressEvent, { type: 'round' }> => e.type === 'round');
+
+    // Round 1: neither has any kept samples yet, so both estimate a full typical run.
+    expect(rounds[0]!.estimatedRemainingUnits).toBe((cfg.minRounds + cfg.stableRounds) * 2);
+    // Monotonically non-increasing as rounds progress and benchmarks accumulate samples/converge.
+    for (let i = 1; i < rounds.length; i++) {
+      expect(rounds[i]!.estimatedRemainingUnits).toBeLessThanOrEqual(rounds[i - 1]!.estimatedRemainingUnits);
+    }
+    // Once only "slow" is left active, remaining reflects just that one benchmark (floored at 1).
+    const lastRound = rounds.at(-1)!;
+    expect(lastRound.active).toBe(1);
+    expect(lastRound.estimatedRemainingUnits).toBeGreaterThanOrEqual(1);
+  });
+
   it('reports the best-so-far after every sample via onUpdate', async () => {
     const bests: number[] = [];
     const a = scripted('a', [12, 11, 10, 10, 10]);
