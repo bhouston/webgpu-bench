@@ -12,6 +12,8 @@ browser, built on [`vgpu`](https://github.com/vercel-labs/vgpu).
 Run it live: click **Run benchmark suite** on the website (`packages/website`) and watch results stream
 into a table as each kernel finishes.
 
+Built to power the GPU benchmarking behind [Web3D Survey](https://web3dsurvey.com/benchmark).
+
 ## Runner and benchmarks are separate
 
 `runSuite` (in `suite.ts`) is a scheduler and nothing else: it round-robins whatever benchmarks it's
@@ -162,3 +164,7 @@ feature, rather than failing the whole run.
 `packages/website/Dockerfile` builds the whole workspace and serves the TanStack Start (Nitro) production
 server on port 3500. `.github/workflows/deploy.yml` deploys it to Cloud Run on push to `main` (reuses the
 generic `deploy-service.yml` workflow).
+
+## Author
+
+Created by [Ben Houston](https://ben3d.ca) and sponsored by [Land of Assets](https://landofassets.com).
