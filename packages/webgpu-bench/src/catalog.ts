@@ -1,21 +1,43 @@
-import { BYTES_METRIC, FLOPS_METRIC, OPS_METRIC } from './benchmarks/common.ts';
-import type { BenchmarkCategory, MetricDef } from './types.ts';
+import { BYTES_METRIC, FLOPS_METRIC, OPS_METRIC, type BenchmarkContext, type BenchmarkDefinition, type PreparedBenchmark } from './benchmarks/common.ts';
+import type { GpuContext } from './gpu/context.ts';
+import type { FlopsHarnessConfig } from './benchmarks/flopsCommon.ts';
 import { streamReadWgsl } from './shaders/streamRead.ts';
 import { streamWriteWgsl } from './shaders/streamWrite.ts';
+import { prepareReadBandwidth, prepareWriteBandwidth } from './benchmarks/streamBandwidth.ts';
 import { flopsF32ScalarWgsl } from './shaders/flopsF32Scalar.ts';
 import { flopsF32Vec4Wgsl } from './shaders/flopsF32Vec4.ts';
 import { flopsF32Mat4Wgsl } from './shaders/flopsF32Mat4.ts';
 import { flopsF32MatvecWgsl } from './shaders/flopsF32Matvec.ts';
+import {
+  prepareFlopsF32Scalar,
+  prepareFlopsF32Vec4,
+  prepareFlopsF32Mat4,
+  prepareFlopsF32Matvec,
+} from './benchmarks/flopsF32.ts';
 import { flopsF16ScalarWgsl } from './shaders/flopsF16Scalar.ts';
 import { flopsF16Vec4Wgsl } from './shaders/flopsF16Vec4.ts';
 import { flopsF16Mat4Wgsl } from './shaders/flopsF16Mat4.ts';
 import { flopsF16MatvecWgsl } from './shaders/flopsF16Matvec.ts';
+import {
+  prepareFlopsF16Scalar,
+  prepareFlopsF16Vec4,
+  prepareFlopsF16Mat4,
+  prepareFlopsF16Matvec,
+} from './benchmarks/flopsF16.ts';
 import { flopsI8ScalarWgsl } from './shaders/flopsI8Scalar.ts';
 import { flopsI8Vec4Wgsl } from './shaders/flopsI8Vec4.ts';
 import { flopsI8Mat4Wgsl } from './shaders/flopsI8Mat4.ts';
 import { flopsI8MatvecWgsl } from './shaders/flopsI8Matvec.ts';
 import { flopsI8MatvecDp4aWgsl } from './shaders/flopsI8MatvecDp4a.ts';
 import { flopsI8Dp4aWgsl } from './shaders/flopsI8Dp4a.ts';
+import {
+  prepareFlopsI8Scalar,
+  prepareFlopsI8Vec4,
+  prepareFlopsI8Mat4,
+  prepareFlopsI8Matvec,
+  prepareFlopsI8MatvecDp4a,
+  prepareFlopsI8Dp4a,
+} from './benchmarks/flopsI8.ts';
 import { flopsF32DivWgsl } from './shaders/flopsF32Div.ts';
 import { flopsI32DivWgsl } from './shaders/flopsI32Div.ts';
 import { flopsF32SqrtWgsl } from './shaders/flopsF32Sqrt.ts';
@@ -29,59 +51,74 @@ import { flopsF16RsqrtWgsl } from './shaders/flopsF16Rsqrt.ts';
 import { flopsF16PowWgsl } from './shaders/flopsF16Pow.ts';
 import { flopsF16SincosWgsl } from './shaders/flopsF16Sincos.ts';
 import { flopsF16LogWgsl } from './shaders/flopsF16Log.ts';
+import {
+  prepareFlopsF32Div,
+  prepareFlopsI32Div,
+  prepareFlopsF32Sqrt,
+  prepareFlopsF32Rsqrt,
+  prepareFlopsF32Pow,
+  prepareFlopsF32Sincos,
+  prepareFlopsF32Log,
+  prepareFlopsF16Div,
+  prepareFlopsF16Sqrt,
+  prepareFlopsF16Rsqrt,
+  prepareFlopsF16Pow,
+  prepareFlopsF16Sincos,
+  prepareFlopsF16Log,
+} from './benchmarks/flopsMath.ts';
 import { flopsU32PackUnpackWgsl } from './shaders/flopsU32PackUnpack.ts';
 import { flopsI32F32ConvertWgsl } from './shaders/flopsI32F32Convert.ts';
 import { flopsF32F16ConvertWgsl } from './shaders/flopsF32F16Convert.ts';
+import {
+  prepareFlopsU32PackUnpack,
+  prepareFlopsI32F32Convert,
+  prepareFlopsF32F16Convert,
+} from './benchmarks/flopsConvert.ts';
 
-/**
- * Identity of one benchmark, known without touching the GPU: label,
- * description and WGSL source for display, plus category/metric for
- * formatting a result once one arrives. The sole source of truth for all
- * of this — `runSuite`'s `BenchmarkResult` rows carry only what's known
- * from actually running (status, timings, `metricValue`), keyed by `id`
- * back onto this catalog rather than repeating it.
- */
-export interface BenchmarkInfo {
-  id: string;
-  label: string;
-  description: string;
-  /** WGSL source of the kernel, for display alongside a result. */
-  source: string;
-  category: BenchmarkCategory;
-  metric: MetricDef;
+export type { BenchmarkContext, BenchmarkDefinition } from './benchmarks/common.ts';
+
+/** Wraps a `prepareRead/WriteBandwidth`-shaped function as a `BenchmarkDefinition.prepare`. */
+function bandwidthPrepare(
+  fn: (ctx: GpuContext, data: BenchmarkContext['data'], harness: BenchmarkContext['harness']) => Promise<PreparedBenchmark>,
+) {
+  return ({ ctx, data, harness }: BenchmarkContext) => fn(ctx, data, harness);
+}
+
+/** Wraps a `prepareFlops*`-shaped function as a `BenchmarkDefinition.prepare`, feeding in the compute work knobs. */
+function flopsPrepare(fn: (ctx: GpuContext, harness: FlopsHarnessConfig) => Promise<PreparedBenchmark>) {
+  return ({ ctx, harness, computeThreads, computeIterations }: BenchmarkContext) =>
+    fn(ctx, { ...harness, threads: computeThreads, iterations: computeIterations });
 }
 
 /**
- * Every benchmark `runSuite` can yield a row for, in the same order it
- * schedules them — so a UI can render the full results table (id, label,
- * category, metric unit, description, source) before a device is even
- * acquired, then fill in throughput as `runSuite`'s rows arrive and merge
- * onto these ids.
- *
- * Kept as a hand-written list, not derived from `suite.ts`'s benchmark
- * table, because `suite.ts` only wires up *how* to run each kernel (its
- * `prepare*` call) — it doesn't carry a duplicate copy of this metadata to
- * derive from. `suite.browser.test.ts` asserts this list's ids match
- * `runSuite`'s one-to-one, so the two can't drift silently.
+ * This package's own benchmarks: memory bandwidth and raw-FLOPS ALU
+ * throughput. Each entry is fully self-contained (display metadata + how to
+ * build it) per the `BenchmarkDefinition` contract in `benchmarks/common.ts`
+ * — `runSuite` doesn't know anything about these specifically, so a caller
+ * can run a filtered subset (`BENCHMARKS.filter(...)`), add their own
+ * definitions alongside them, or ignore this list entirely and pass their
+ * own via `SuiteOptions.benchmarks`.
  */
-export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
+export const BENCHMARKS: readonly BenchmarkDefinition[] = [
   {
     id: 'read-bandwidth',
-    label: 'Read bandwidth',
+    label: 'bandwidth read',
     description:
       'Coalesced grid-stride loop: adjacent threads load adjacent vec4<f32>s from a large buffer, folded with addition only, one scalar written per thread. Read-bandwidth-bound.',
     source: streamReadWgsl,
     category: 'bandwidth',
     metric: BYTES_METRIC,
+    prepare: bandwidthPrepare(prepareReadBandwidth),
   },
   {
     id: 'write-bandwidth',
-    label: 'Write bandwidth',
+    label: 'bandwidth write',
     description:
       'Coalesced grid-stride loop: adjacent threads store adjacent computed vec4<f32>s into a large buffer with no buffer reads. Write-bandwidth-bound.',
     source: streamWriteWgsl,
     category: 'bandwidth',
     metric: BYTES_METRIC,
+    prepare: bandwidthPrepare(prepareWriteBandwidth),
   },
   {
     id: 'flops-f32-scalar',
@@ -91,6 +128,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32ScalarWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Scalar),
   },
   {
     id: 'flops-f32-vec4',
@@ -100,6 +138,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32Vec4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Vec4),
   },
   {
     id: 'flops-f32-mat4',
@@ -109,6 +148,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32Mat4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Mat4),
   },
   {
     id: 'flops-f32-matvec',
@@ -118,6 +158,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32MatvecWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Matvec),
   },
   {
     id: 'flops-f16-scalar',
@@ -127,6 +168,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16ScalarWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Scalar),
   },
   {
     id: 'flops-f16-vec4',
@@ -136,6 +178,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16Vec4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Vec4),
   },
   {
     id: 'flops-f16-mat4',
@@ -145,6 +188,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16Mat4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Mat4),
   },
   {
     id: 'flops-f16-matvec',
@@ -154,6 +198,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16MatvecWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Matvec),
   },
   {
     id: 'flops-i8-scalar',
@@ -163,6 +208,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI8ScalarWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI8Scalar),
   },
   {
     id: 'flops-i8-vec4',
@@ -171,6 +217,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI8Vec4Wgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI8Vec4),
   },
   {
     id: 'flops-i8-mat4',
@@ -180,6 +227,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI8Mat4Wgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI8Mat4),
   },
   {
     id: 'flops-i8-matvec',
@@ -189,6 +237,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI8MatvecWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI8Matvec),
   },
   {
     id: 'flops-i8-matvec-dp4a',
@@ -198,6 +247,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI8MatvecDp4aWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI8MatvecDp4a),
   },
   {
     id: 'flops-i8-dp4a',
@@ -207,6 +257,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI8Dp4aWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI8Dp4a),
   },
   {
     id: 'flops-f32-div',
@@ -216,6 +267,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32DivWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Div),
   },
   {
     id: 'flops-i32-div',
@@ -225,6 +277,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI32DivWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI32Div),
   },
   {
     id: 'flops-f32-sqrt',
@@ -234,6 +287,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32SqrtWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Sqrt),
   },
   {
     id: 'flops-f32-rsqrt',
@@ -243,6 +297,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32RsqrtWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Rsqrt),
   },
   {
     id: 'flops-f32-pow',
@@ -252,6 +307,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32PowWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Pow),
   },
   {
     id: 'flops-f32-sincos',
@@ -261,6 +317,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32SincosWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Sincos),
   },
   {
     id: 'flops-f32-log',
@@ -270,6 +327,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32LogWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32Log),
   },
   {
     id: 'flops-f16-div',
@@ -279,6 +337,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16DivWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Div),
   },
   {
     id: 'flops-f16-sqrt',
@@ -288,6 +347,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16SqrtWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Sqrt),
   },
   {
     id: 'flops-f16-rsqrt',
@@ -297,6 +357,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16RsqrtWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Rsqrt),
   },
   {
     id: 'flops-f16-pow',
@@ -306,6 +367,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16PowWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Pow),
   },
   {
     id: 'flops-f16-sincos',
@@ -315,6 +377,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16SincosWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Sincos),
   },
   {
     id: 'flops-f16-log',
@@ -324,6 +387,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF16LogWgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF16Log),
   },
   {
     id: 'flops-u32-packunpack',
@@ -333,6 +397,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsU32PackUnpackWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsU32PackUnpack),
   },
   {
     id: 'flops-i32-f32-convert',
@@ -342,6 +407,7 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsI32F32ConvertWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsI32F32Convert),
   },
   {
     id: 'flops-f32-f16-convert',
@@ -351,5 +417,6 @@ export const BENCHMARK_CATALOG: readonly BenchmarkInfo[] = [
     source: flopsF32F16ConvertWgsl,
     category: 'compute',
     metric: OPS_METRIC,
+    prepare: flopsPrepare(prepareFlopsF32F16Convert),
   },
 ];

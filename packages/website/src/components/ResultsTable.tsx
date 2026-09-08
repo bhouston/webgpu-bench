@@ -1,12 +1,12 @@
 import { humanizeUnit } from 'humanize-units';
 import { Info } from 'lucide-react';
 
-import { BENCHMARK_CATALOG, type BenchmarkInfo, type BenchmarkResult } from 'webgpu-bench';
+import { BENCHMARKS, type BenchmarkDefinition, type BenchmarkResult } from 'webgpu-bench';
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const CATALOG_BY_ID = new Map(BENCHMARK_CATALOG.map((b) => [b.id, b]));
+const CATALOG_BY_ID = new Map(BENCHMARKS.map((b) => [b.id, b]));
 
 function formatThroughput(value: number | undefined, unit: string): string {
   if (value === undefined || !Number.isFinite(value)) return '—';
@@ -27,7 +27,7 @@ function displayName(label: string): string {
  * the cell itself instead of a separate status column; rows still being
  * sampled show their best-so-far (dimmed) since the best only ever improves.
  */
-function MetricCell({ r, info }: { r: BenchmarkResult; info: BenchmarkInfo }) {
+function MetricCell({ r, info }: { r: BenchmarkResult; info: BenchmarkDefinition }) {
   let text: string;
   let className = 'text-right tabular-nums';
   switch (r.status) {
@@ -56,7 +56,7 @@ function MetricCell({ r, info }: { r: BenchmarkResult; info: BenchmarkInfo }) {
 }
 
 /** (i) button that pops up the benchmark's description and WGSL source in a shadcn dialog. */
-function KernelInfoButton({ info }: { info: BenchmarkInfo }) {
+function KernelInfoButton({ info }: { info: BenchmarkDefinition }) {
   return (
     <Dialog>
       <DialogTrigger asChild>

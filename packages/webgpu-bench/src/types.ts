@@ -1,3 +1,5 @@
+import type { BenchmarkDefinition } from './benchmarks/common.ts';
+
 /** Summary statistics computed over the kept (non-throttled) timed measurements. */
 export interface Stats {
   mean: number;
@@ -48,8 +50,8 @@ export interface MetricDef {
  * progress incrementally.
  *
  * Pure measurement, no identity/display metadata: label, description, WGSL
- * source, and the metric definition all live on the matching `id` in
- * `BENCHMARK_CATALOG` instead, so a UI joins a result onto its catalog row
+ * source, and the metric definition all live on the matching `id`'s
+ * `BenchmarkDefinition` instead, so a UI joins a result onto its definition
  * rather than getting them handed twice.
  */
 export interface BenchmarkResult {
@@ -104,6 +106,13 @@ export type SuiteProgressEvent =
   | { type: 'throttle-abort'; throttledIds: string[] };
 
 export interface SuiteOptions {
+  /**
+   * Which benchmarks to run — this package's own `BENCHMARKS` by default.
+   * Pass a filtered subset, your own `BenchmarkDefinition`s, or a mix of
+   * both; `runSuite` doesn't otherwise know or care what a definition
+   * measures.
+   */
+  benchmarks?: readonly BenchmarkDefinition[];
   /** Streamed buffer rows (for the bandwidth benchmarks). Padded up to a multiple of 4. Default 4096. */
   rows?: number;
   /** Streamed buffer cols (for the bandwidth benchmarks). Padded up to a multiple of 4. Default 4096. */

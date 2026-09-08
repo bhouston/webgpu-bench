@@ -1,6 +1,5 @@
+// The runner — knows nothing about what any benchmark measures.
 export { runSuite } from './suite.ts';
-export { BENCHMARK_CATALOG } from './catalog.ts';
-export type { BenchmarkInfo } from './catalog.ts';
 export type {
   BenchmarkResult,
   SuiteOptions,
@@ -19,6 +18,28 @@ export { DEFAULT_SAMPLING, runSampling, recordSample, roundIsThrottled, resolveS
 export type { SamplingConfig, Sampleable, SampleState, SampleStateSnapshot, RunSamplingOptions } from './sampling.ts';
 export { DEFAULT_MEASUREMENT, KernelSampler } from './gpu/benchmarkRunner.ts';
 export type { MeasurementConfig, KernelHarness, WorkKnob } from './gpu/benchmarkRunner.ts';
-export { generateMatVecData, padToMultipleOf4, mulberry32 } from './data/generate.ts';
 export { acquireGpuContext } from './gpu/context.ts';
 export type { GpuContext } from './gpu/context.ts';
+
+// The contract a benchmark implements, plus the building blocks
+// (`createPipeline`, `prepareKernelBenchmark`, the shared metric defs) for
+// writing one — whether it's a new one, or a variant of a built-in.
+export type { BenchmarkContext, BenchmarkDefinition, BenchmarkMeta, HarnessConfig, PreparedBenchmark } from './benchmarks/common.ts';
+export {
+  createPipeline,
+  prepareKernelBenchmark,
+  metricPerSecond,
+  rowFromMeta,
+  skippedResult,
+  errorResult,
+  FLOPS_METRIC,
+  OPS_METRIC,
+  BYTES_METRIC,
+} from './benchmarks/common.ts';
+export { generateMatVecData, padToMultipleOf4, mulberry32 } from './data/generate.ts';
+export type { GeneratedData } from './data/generate.ts';
+
+// This package's own benchmark definitions (memory bandwidth + raw-FLOPS
+// ALU throughput) — the default for `runSuite`, but just one possible
+// `BenchmarkDefinition[]` among others; see `SuiteOptions.benchmarks`.
+export { BENCHMARKS } from './catalog.ts';

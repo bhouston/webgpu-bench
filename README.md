@@ -7,7 +7,46 @@ browser, built on [`vgpu`](https://github.com/vercel-labs/vgpu).
 Run it live: click **Run benchmark suite** on the website (`packages/website`) and watch results stream
 into a table as each kernel finishes.
 
-## What it measures
+## Runner and benchmarks are separate
+
+`runSuite` (in `suite.ts`) is a scheduler and nothing else: it round-robins whatever benchmarks it's
+given, times them, watches for thermal throttling, and yields result rows. It has no idea what any
+given benchmark measures — that's entirely up to a `BenchmarkDefinition` (the contract in
+`benchmarks/common.ts`): display metadata (`label`, `description`, `source`, `category`, `metric`) plus
+a `prepare()` that builds the GPU resources.
+
+`BENCHMARKS` (in `catalog.ts`) is just this package's own list of definitions — memory bandwidth and
+raw-FLOPS ALU throughput, the table below — and it's what `runSuite` uses by default. It isn't special
+to the runner: pass `SuiteOptions.benchmarks` to run a filtered subset (`BENCHMARKS.filter(...)`), your
+own definitions instead, or a mix of both:
+
+```ts
+import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'webgpu-bench';
+
+const myKernel: BenchmarkDefinition = {
+  id: 'my-kernel',
+  label: 'My kernel',
+  description: '...',
+  source: myWgsl,
+  category: 'compute',
+  metric: { key: 'flops', unit: 'FLOP', name: 'Floating-point ops' },
+  prepare: async ({ ctx, harness }) => {
+    /* build a pipeline/bind group, return via prepareKernelBenchmark(...) */
+  },
+};
+
+for await (const result of runSuite({
+  benchmarks: [...BENCHMARKS.filter((b) => b.category === 'bandwidth'), myKernel],
+})) {
+  // ...
+}
+```
+
+`index.ts` exports everything needed to write a `prepare()`: `GpuContext`/`acquireGpuContext`,
+`createPipeline`, `prepareKernelBenchmark`, the shared `FLOPS_METRIC`/`OPS_METRIC`/`BYTES_METRIC`, and
+`generateMatVecData` for the same deterministic data the built-ins use.
+
+## What the built-in benchmarks measure
 
 Every benchmark deliberately isolates a single resource — memory read, memory write, or ALU throughput —
 by keeping the other two as close to zero as the WebGPU compute model allows, rather than modeling a

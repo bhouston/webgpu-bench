@@ -1,5 +1,6 @@
 import type { GpuContext } from '../gpu/context.ts';
 import type { KernelHarness, MeasurementConfig, WorkKnob } from '../gpu/benchmarkRunner.ts';
+import type { GeneratedData } from '../data/generate.ts';
 import type { BenchmarkCategory, BenchmarkResult, MetricDef } from '../types.ts';
 
 /** Shared metric definitions. `key` is what a JSON export would key the value by, stable across every benchmark that reports it. */
@@ -51,8 +52,8 @@ export type HarnessConfig = MeasurementConfig;
 
 /**
  * Everything about a benchmark that's known before it's measured. Identity/display
- * fields (label, description, source, metric) live in `BENCHMARK_CATALOG` instead —
- * this is just what a live run needs to size and account for the work.
+ * fields (label, description, source, metric) live on its `BenchmarkDefinition`
+ * instead — this is just what a live run needs to size and account for the work.
  */
 export interface BenchmarkMeta {
   id: string;
@@ -117,6 +118,36 @@ export function prepareKernelBenchmark(opts: PrepareKernelOptions): PreparedBenc
       },
     },
   };
+}
+
+/** What `runSuite` hands a `BenchmarkDefinition.prepare` to build its GPU resources. */
+export interface BenchmarkContext {
+  ctx: GpuContext;
+  /** Deterministic matrix/vector data, sized per `SuiteOptions.rows`/`cols`. Only the bandwidth kernels use it. */
+  data: GeneratedData;
+  harness: HarnessConfig;
+  /** See `SuiteOptions.computeThreads`. Only the raw-FLOPS compute kernels use this. */
+  computeThreads?: number;
+  /** See `SuiteOptions.computeIterations`. Only the raw-FLOPS compute kernels use this. */
+  computeIterations?: number;
+}
+
+/**
+ * A benchmark, fully self-contained: display metadata plus how to build it.
+ * This is the contract `runSuite` runs against — the built-in benchmarks in
+ * `catalog.ts` implement it, and so can anyone else's, passed in via
+ * `SuiteOptions.benchmarks` alongside, instead of, or as a filtered subset
+ * of the built-ins.
+ */
+export interface BenchmarkDefinition {
+  id: string;
+  label: string;
+  description: string;
+  /** WGSL source of the kernel, for display alongside a result. */
+  source: string;
+  category: BenchmarkCategory;
+  metric: MetricDef;
+  prepare(bc: BenchmarkContext): Promise<PreparedBenchmark>;
 }
 
 export function skippedResult(meta: BenchmarkMeta, message: string): BenchmarkResult {

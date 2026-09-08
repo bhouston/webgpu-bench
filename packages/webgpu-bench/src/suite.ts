@@ -2,56 +2,18 @@ import { acquireGpuContext, type GpuContext } from './gpu/context.ts';
 import { generateMatVecData, padToMultipleOf4 } from './data/generate.ts';
 import { KernelSampler } from './gpu/benchmarkRunner.ts';
 import { runSampling, type Sampleable, type SampleStateSnapshot } from './sampling.ts';
-import { prepareReadBandwidth, prepareWriteBandwidth } from './benchmarks/streamBandwidth.ts';
-import {
-  prepareFlopsF32Scalar,
-  prepareFlopsF32Vec4,
-  prepareFlopsF32Mat4,
-  prepareFlopsF32Matvec,
-} from './benchmarks/flopsF32.ts';
-import {
-  prepareFlopsF16Scalar,
-  prepareFlopsF16Vec4,
-  prepareFlopsF16Mat4,
-  prepareFlopsF16Matvec,
-} from './benchmarks/flopsF16.ts';
-import {
-  prepareFlopsI8Scalar,
-  prepareFlopsI8Vec4,
-  prepareFlopsI8Mat4,
-  prepareFlopsI8Matvec,
-  prepareFlopsI8MatvecDp4a,
-  prepareFlopsI8Dp4a,
-} from './benchmarks/flopsI8.ts';
-import {
-  prepareFlopsF32Div,
-  prepareFlopsI32Div,
-  prepareFlopsF32Sqrt,
-  prepareFlopsF32Rsqrt,
-  prepareFlopsF32Pow,
-  prepareFlopsF32Sincos,
-  prepareFlopsF32Log,
-  prepareFlopsF16Div,
-  prepareFlopsF16Sqrt,
-  prepareFlopsF16Rsqrt,
-  prepareFlopsF16Pow,
-  prepareFlopsF16Sincos,
-  prepareFlopsF16Log,
-} from './benchmarks/flopsMath.ts';
-import {
-  prepareFlopsU32PackUnpack,
-  prepareFlopsI32F32Convert,
-  prepareFlopsF32F16Convert,
-} from './benchmarks/flopsConvert.ts';
 import {
   errorResult,
   metricPerSecond,
   rowFromMeta,
+  type BenchmarkContext,
+  type BenchmarkDefinition,
   type BenchmarkMeta,
   type HarnessConfig,
   type PreparedBenchmark,
 } from './benchmarks/common.ts';
-import type { BenchmarkCategory, BenchmarkResult, SuiteOptions } from './types.ts';
+import { BENCHMARKS } from './catalog.ts';
+import type { BenchmarkResult, SuiteOptions } from './types.ts';
 
 export type {
   BenchmarkResult,
@@ -65,15 +27,13 @@ export type {
   MetricDef,
 } from './types.ts';
 export { computeStats } from './stats.ts';
+export { BENCHMARKS } from './catalog.ts';
+export type { BenchmarkContext, BenchmarkDefinition } from './benchmarks/common.ts';
 
 const DEFAULT_ROWS = 4096;
 const DEFAULT_COLS = 4096;
 
-type BenchmarkEntry = readonly [id: string, category: BenchmarkCategory, prepare: () => Promise<PreparedBenchmark>];
-const bandwidth = (id: string, prepare: () => Promise<PreparedBenchmark>): BenchmarkEntry => [id, 'bandwidth', prepare];
-const compute = (id: string, prepare: () => Promise<PreparedBenchmark>): BenchmarkEntry => [id, 'compute', prepare];
-
-/** A kernel wired to its sampler, plus the metadata needed to turn timings into a results row. */
+/** A benchmark wired to its sampler, plus the metadata needed to turn timings into a results row. */
 interface ScheduledKernel {
   meta: BenchmarkMeta;
   sampler: KernelSampler;
@@ -81,16 +41,18 @@ interface ScheduledKernel {
 }
 
 /**
- * Runs the full benchmark suite, yielding a BenchmarkResult every time a
- * row changes so a UI can render the results table incrementally: once
- * when each benchmark is set up (`running`), after every measurement (still
- * `running`, with the best-so-far), and once when it finishes (ok / skipped
- * / error).
+ * Runs a suite of benchmarks — this package's own (`BENCHMARKS`, the
+ * default) unless `options.benchmarks` names a different list — yielding a
+ * BenchmarkResult every time a row changes so a UI can render the results
+ * table incrementally: once when each benchmark is set up (`running`), after
+ * every measurement (still `running`, with the best-so-far), and once when
+ * it finishes (ok / skipped / error).
  *
- * Every benchmark isolates a single resource — memory read, memory write,
- * or ALU throughput — rather than modeling a specific real-world op, so
- * results are directly comparable to the device's published bandwidth /
- * FLOPS specs.
+ * `runSuite` itself knows nothing about what any given benchmark measures —
+ * it just calls each `BenchmarkDefinition.prepare` (see `benchmarks/common.ts`)
+ * to get GPU resources, then schedules and times them. Bring your own
+ * definitions, mix them with the built-ins, or run a filtered subset of
+ * `BENCHMARKS` — the scheduling below doesn't change.
  *
  * Measurements are scheduled round-robin across all benchmarks with idle
  * gaps and thermal cooldowns (see `runSampling`), and the reported number
@@ -99,71 +61,36 @@ interface ScheduledKernel {
  * doing while hot.
  */
 export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<BenchmarkResult> {
+  const benchmarks: readonly BenchmarkDefinition[] = options.benchmarks ?? BENCHMARKS;
   const rows = padToMultipleOf4(options.rows ?? DEFAULT_ROWS);
   const cols = padToMultipleOf4(options.cols ?? DEFAULT_COLS);
 
   const ctx = await acquireGpuContext();
   options.onDeviceInfo?.(ctx.info);
 
-  const data = generateMatVecData(rows, cols);
   const harness: HarnessConfig = {
     targetMs: options.targetMs,
     targetDispatchMs: options.targetDispatchMs,
     warmups: options.warmups,
   };
-  const flopsHarness = { ...harness, threads: options.computeThreads, iterations: options.computeIterations };
-
-  const benchmarks: readonly BenchmarkEntry[] = [
-    bandwidth('read-bandwidth', () => prepareReadBandwidth(ctx, data, harness)),
-    bandwidth('write-bandwidth', () => prepareWriteBandwidth(ctx, data, harness)),
-    compute('flops-f32-scalar', () => prepareFlopsF32Scalar(ctx, flopsHarness)),
-    compute('flops-f32-vec4', () => prepareFlopsF32Vec4(ctx, flopsHarness)),
-    compute('flops-f32-mat4', () => prepareFlopsF32Mat4(ctx, flopsHarness)),
-    compute('flops-f32-matvec', () => prepareFlopsF32Matvec(ctx, flopsHarness)),
-    compute('flops-f16-scalar', () => prepareFlopsF16Scalar(ctx, flopsHarness)),
-    compute('flops-f16-vec4', () => prepareFlopsF16Vec4(ctx, flopsHarness)),
-    compute('flops-f16-mat4', () => prepareFlopsF16Mat4(ctx, flopsHarness)),
-    compute('flops-f16-matvec', () => prepareFlopsF16Matvec(ctx, flopsHarness)),
-    compute('flops-i8-scalar', () => prepareFlopsI8Scalar(ctx, flopsHarness)),
-    compute('flops-i8-vec4', () => prepareFlopsI8Vec4(ctx, flopsHarness)),
-    compute('flops-i8-mat4', () => prepareFlopsI8Mat4(ctx, flopsHarness)),
-    compute('flops-i8-matvec', () => prepareFlopsI8Matvec(ctx, flopsHarness)),
-    compute('flops-i8-matvec-dp4a', () => prepareFlopsI8MatvecDp4a(ctx, flopsHarness)),
-    compute('flops-i8-dp4a', () => prepareFlopsI8Dp4a(ctx, flopsHarness)),
-    compute('flops-f32-div', () => prepareFlopsF32Div(ctx, flopsHarness)),
-    compute('flops-i32-div', () => prepareFlopsI32Div(ctx, flopsHarness)),
-    compute('flops-f32-sqrt', () => prepareFlopsF32Sqrt(ctx, flopsHarness)),
-    compute('flops-f32-rsqrt', () => prepareFlopsF32Rsqrt(ctx, flopsHarness)),
-    compute('flops-f32-pow', () => prepareFlopsF32Pow(ctx, flopsHarness)),
-    compute('flops-f32-sincos', () => prepareFlopsF32Sincos(ctx, flopsHarness)),
-    compute('flops-f32-log', () => prepareFlopsF32Log(ctx, flopsHarness)),
-    compute('flops-f16-div', () => prepareFlopsF16Div(ctx, flopsHarness)),
-    compute('flops-f16-sqrt', () => prepareFlopsF16Sqrt(ctx, flopsHarness)),
-    compute('flops-f16-rsqrt', () => prepareFlopsF16Rsqrt(ctx, flopsHarness)),
-    compute('flops-f16-pow', () => prepareFlopsF16Pow(ctx, flopsHarness)),
-    compute('flops-f16-sincos', () => prepareFlopsF16Sincos(ctx, flopsHarness)),
-    compute('flops-f16-log', () => prepareFlopsF16Log(ctx, flopsHarness)),
-    compute('flops-u32-packunpack', () => prepareFlopsU32PackUnpack(ctx, flopsHarness)),
-    compute('flops-i32-f32-convert', () => prepareFlopsI32F32Convert(ctx, flopsHarness)),
-    compute('flops-f32-f16-convert', () => prepareFlopsF32F16Convert(ctx, flopsHarness)),
-  ];
+  const bc: BenchmarkContext = {
+    ctx,
+    data: generateMatVecData(rows, cols),
+    harness,
+    computeThreads: options.computeThreads,
+    computeIterations: options.computeIterations,
+  };
 
   // Phase 1: build every benchmark's GPU resources up front. Rows that can't
   // run at all (missing feature, failed shader compile) resolve right here;
   // the rest show up as `running` so the table has its final shape before
   // the first measurement lands.
   const scheduled: ScheduledKernel[] = [];
-  for (const [id, category, prepare] of benchmarks) {
-    const fallbackMeta: BenchmarkMeta = {
-      id,
-      category,
-      rows,
-      cols,
-      amountPerOp: 0,
-    };
+  for (const def of benchmarks) {
+    const fallbackMeta: BenchmarkMeta = { id: def.id, category: def.category, rows, cols, amountPerOp: 0 };
     let prepared: PreparedBenchmark;
     try {
-      prepared = await prepare();
+      prepared = await def.prepare(bc);
     } catch (error) {
       yield errorResult(fallbackMeta, error);
       continue;
