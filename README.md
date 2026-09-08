@@ -9,7 +9,7 @@ A focused benchmark suite for the raw ceilings of a WebGPU device: memory **band
 and **FLOPS** (fp32, fp16, and int8, at scalar / vec4 / mat4 / register-resident-matvec granularity), run head to head in the
 browser, built on [`vgpu`](https://github.com/vercel-labs/vgpu).
 
-Built to power the GPU benchmarking behind [Web3D Survey](https://web3dsurvey.com/benchmark).
+Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark).
 
 ## Runner and benchmarks are separate
 
