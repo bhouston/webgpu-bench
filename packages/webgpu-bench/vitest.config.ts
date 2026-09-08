@@ -17,21 +17,20 @@ export default defineConfig({
           include: ['src/**/*.browser.test.ts'],
           browser: {
             enabled: true,
-            provider: playwright(),
-            headless: false,
-            instances: [
-              {
-                browser: 'chromium',
-                launch: {
-                  // Playwright's `headless: true` launches the stripped
-                  // "headless shell" binary, which has no GPU process and so
-                  // no WebGPU. `--headless=new` on the full Chrome binary
-                  // (headless: false here) is the real new-headless mode and
-                  // does support WebGPU.
-                  args: ['--headless=new', '--enable-unsafe-webgpu', '--ignore-gpu-blocklist'],
-                },
+            // Playwright's `headless: true` launches the stripped "headless
+            // shell" binary, which has no GPU process and so no WebGPU.
+            // `--headless=new` on the full Chrome binary (headless: false
+            // here) is the real new-headless mode and does support WebGPU.
+            // Launch args only take effect via the provider's
+            // `launchOptions` (an `instances[].launch` key is not a real
+            // vitest browser option and is silently ignored).
+            provider: playwright({
+              launchOptions: {
+                args: ['--headless=new', '--enable-unsafe-webgpu', '--ignore-gpu-blocklist'],
               },
-            ],
+            }),
+            headless: false,
+            instances: [{ browser: 'chromium' }],
           },
         },
       },
