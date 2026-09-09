@@ -1,8 +1,8 @@
-# vgpu-bench
+# webgpu-bench
 
-[![CI](https://github.com/bhouston/vgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/vgpu-bench/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/vgpu-bench.svg)](https://www.npmjs.com/package/vgpu-bench)
-[![npm downloads](https://img.shields.io/npm/dm/vgpu-bench.svg)](https://www.npmjs.com/package/vgpu-bench)
+[![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
+[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 
 A focused benchmark suite for the raw ceilings of a WebGPU device: memory **bandwidth** (read and write)
@@ -25,7 +25,7 @@ to the runner: pass `SuiteOptions.benchmarks` to run a filtered subset (`BENCHMA
 own definitions instead, or a mix of both:
 
 ```ts
-import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'vgpu-bench';
+import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'webgpu-bench';
 
 const myKernel: BenchmarkDefinition = {
   id: 'my-kernel',
@@ -137,7 +137,7 @@ table just shows the best.
 
 ## Monorepo layout
 
-- `packages/vgpu-bench` — the benchmark suite itself (WGSL shaders, data generation, timing
+- `packages/webgpu-bench` — the benchmark suite itself (WGSL shaders, data generation, timing
   harness, orchestration). Framework-agnostic, browser-only, consumed as TypeScript source.
 - `packages/website` — TanStack Start + Tailwind CSS + shadcn/ui app that runs the suite client-side and
   renders results incrementally. Dev server on **port 3500**.
@@ -147,7 +147,7 @@ table just shows the best.
 ```bash
 pnpm install
 pnpm dev        # starts the website on http://localhost:3500
-pnpm build      # typecheck vgpu-bench + build the website
+pnpm build      # typecheck webgpu-bench + build the website
 pnpm lint
 pnpm tsc
 ```

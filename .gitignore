@@ -9,6 +9,6 @@ coverage
 *.tsbuildinfo
 .env
 .DS_Store
-packages/vgpu-bench/.vitest-attachments/
-packages/vgpu-bench/src/__screenshots__/
-packages/vgpu-bench/publish
+packages/webgpu-bench/.vitest-attachments/
+packages/webgpu-bench/src/__screenshots__/
+packages/webgpu-bench/publish

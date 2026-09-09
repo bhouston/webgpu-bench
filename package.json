@@ -1,5 +1,5 @@
 {
-  "name": "vgpu-bench-monorepo",
+  "name": "webgpu-bench-monorepo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r build",
-    "dev": "pnpm --parallel --filter vgpu-bench --filter website dev",
+    "dev": "pnpm --parallel --filter webgpu-bench --filter website dev",
     "start": "pnpm --filter website start",
     "clean": "rimraf dist packages/**/dist packages/**/.output packages/**/.nitro packages/**/.tanstack",
     "clean:all": "pnpm clean && rimraf node_modules packages/**/node_modules",
@@ -16,7 +16,7 @@
     "lint:fix": "oxlint --fix .",
     "tsc": "tsc -b",
     "test": "pnpm -r test",
-    "make-release": "node scripts/make-release.mjs packages/vgpu-bench"
+    "make-release": "node scripts/make-release.mjs packages/webgpu-bench"
   },
   "devDependencies": {
     "@types/node": "^24",

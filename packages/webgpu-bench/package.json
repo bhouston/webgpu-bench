@@ -1,5 +1,5 @@
 {
-  "name": "vgpu-bench",
+  "name": "webgpu-bench",
   "version": "0.7.2",
   "description": "Benchmark suite for WebGPU's raw ceilings: memory bandwidth and fp32/fp16/int8 FLOPS.",
   "keywords": [
@@ -11,16 +11,16 @@
     "profiler",
     "wgsl"
   ],
-  "homepage": "https://github.com/bhouston/vgpu-bench",
+  "homepage": "https://github.com/bhouston/webgpu-bench",
   "bugs": {
-    "url": "https://github.com/bhouston/vgpu-bench/issues"
+    "url": "https://github.com/bhouston/webgpu-bench/issues"
   },
   "license": "MIT",
   "author": "Ben Houston (https://ben3d.ca)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bhouston/vgpu-bench.git",
-    "directory": "packages/vgpu-bench"
+    "url": "git+https://github.com/bhouston/webgpu-bench.git",
+    "directory": "packages/webgpu-bench"
   },
   "files": [
     "dist"
