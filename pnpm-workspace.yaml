@@ -5,15 +5,6 @@ resolutionMode: highest
 
 link-workspace-packages: true
 
-minimumReleaseAgeExclude:
-  - '@vgpu/adapter-mock@0.4.0'
-  - '@vgpu/adapter-node@0.4.0'
-  - '@vgpu/core@0.4.0'
-  - '@vgpu/wgsl-std@0.4.0'
-  - '@vgpu/wgsl@0.4.0'
-  - vgpu@0.4.0
-
 allowBuilds:
-  '@vgpu/adapter-node': false
   esbuild: true
   webgpu: false
