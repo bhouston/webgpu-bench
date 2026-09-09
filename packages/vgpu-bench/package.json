@@ -9,8 +9,7 @@
     "flops",
     "bandwidth",
     "profiler",
-    "wgsl",
-    "vgpu"
+    "wgsl"
   ],
   "homepage": "https://github.com/bhouston/vgpu-bench",
   "bugs": {
@@ -35,9 +34,6 @@
     "dev": "tsc -w --preserveWatchOutput --noEmitOnError",
     "test": "vitest run",
     "test:browser": "vitest run --project browser"
-  },
-  "dependencies": {
-    "vgpu": "^0.4.0"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.69"

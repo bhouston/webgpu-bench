@@ -3,16 +3,13 @@
 [![CI](https://github.com/bhouston/vgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/vgpu-bench/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/vgpu-bench.svg)](https://www.npmjs.com/package/vgpu-bench)
 [![npm downloads](https://img.shields.io/npm/dm/vgpu-bench.svg)](https://www.npmjs.com/package/vgpu-bench)
-[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://vgpu-bench.ben3d.ca)
+[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 
 A focused benchmark suite for the raw ceilings of a WebGPU device: memory **bandwidth** (read and write)
 and **FLOPS** (fp32, fp16, and int8, at scalar / vec4 / mat4 / register-resident-matvec granularity), run head to head in the
-browser, built on [`vgpu`](https://github.com/vercel-labs/vgpu).
+browser.
 
-Run it live: click **Run benchmark suite** on [the demo website](https://vgpu-bench.ben3d.ca) and watch results stream
-into a table as each kernel finishes.
-
-Built to power the GPU benchmarking behind [Web3D Survey](https://web3dsurvey.com/benchmark).
+Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark).
 
 ## Runner and benchmarks are separate
 
