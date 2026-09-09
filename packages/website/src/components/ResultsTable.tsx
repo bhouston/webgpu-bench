@@ -1,7 +1,7 @@
 import { humanizeUnit } from 'humanize-units';
 import { Info } from 'lucide-react';
 
-import { BENCHMARKS, type BenchmarkDefinition, type BenchmarkResult } from 'webgpu-bench';
+import { BENCHMARKS, type BenchmarkDefinition, type BenchmarkResult } from 'vgpu-bench';
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

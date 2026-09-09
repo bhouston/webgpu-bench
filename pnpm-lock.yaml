@@ -42,7 +42,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@24.13.3)(@vitest/browser-playwright@5.0.0)(@vitest/ui@5.0.0)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(yaml@2.9.0))
 
-  packages/webgpu-bench:
+  packages/vgpu-bench:
     dependencies:
       vgpu:
         specifier: ^0.4.0
@@ -96,9 +96,9 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
-      webgpu-bench:
+      vgpu-bench:
         specifier: workspace:*
-        version: link:../webgpu-bench
+        version: link:../vgpu-bench
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.1.18

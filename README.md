@@ -1,15 +1,15 @@
-# webgpu-bench
+# vgpu-bench
 
-[![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
-[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
-[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://webgpu-bench.ben3d.ca)
+[![CI](https://github.com/bhouston/vgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/vgpu-bench/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/vgpu-bench.svg)](https://www.npmjs.com/package/vgpu-bench)
+[![npm downloads](https://img.shields.io/npm/dm/vgpu-bench.svg)](https://www.npmjs.com/package/vgpu-bench)
+[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://vgpu-bench.ben3d.ca)
 
 A focused benchmark suite for the raw ceilings of a WebGPU device: memory **bandwidth** (read and write)
 and **FLOPS** (fp32, fp16, and int8, at scalar / vec4 / mat4 / register-resident-matvec granularity), run head to head in the
 browser, built on [`vgpu`](https://github.com/vercel-labs/vgpu).
 
-Run it live: click **Run benchmark suite** on [the demo website](https://webgpu-bench.ben3d.ca) and watch results stream
+Run it live: click **Run benchmark suite** on [the demo website](https://vgpu-bench.ben3d.ca) and watch results stream
 into a table as each kernel finishes.
 
 Built to power the GPU benchmarking behind [Web3D Survey](https://web3dsurvey.com/benchmark).
@@ -28,7 +28,7 @@ to the runner: pass `SuiteOptions.benchmarks` to run a filtered subset (`BENCHMA
 own definitions instead, or a mix of both:
 
 ```ts
-import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'webgpu-bench';
+import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'vgpu-bench';
 
 const myKernel: BenchmarkDefinition = {
   id: 'my-kernel',
@@ -140,7 +140,7 @@ table just shows the best.
 
 ## Monorepo layout
 
-- `packages/webgpu-bench` — the benchmark suite itself (WGSL shaders, data generation, timing
+- `packages/vgpu-bench` — the benchmark suite itself (WGSL shaders, data generation, timing
   harness, orchestration). Framework-agnostic, browser-only, consumed as TypeScript source.
 - `packages/website` — TanStack Start + Tailwind CSS + shadcn/ui app that runs the suite client-side and
   renders results incrementally. Dev server on **port 3500**.
@@ -150,7 +150,7 @@ table just shows the best.
 ```bash
 pnpm install
 pnpm dev        # starts the website on http://localhost:3500
-pnpm build      # typecheck webgpu-bench + build the website
+pnpm build      # typecheck vgpu-bench + build the website
 pnpm lint
 pnpm tsc
 ```

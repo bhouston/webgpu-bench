@@ -16,16 +16,16 @@ export function SiteHeader() {
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <CpuIcon className="size-6 shrink-0" aria-hidden />
-          <h1 className="font-heading text-base font-medium tracking-tight">webgpu-bench</h1>
+          <h1 className="font-heading text-base font-medium tracking-tight">vgpu-bench</h1>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="icon" asChild>
-            <a href="https://github.com/bhouston/webgpu-bench" aria-label="GitHub" title="GitHub">
+            <a href="https://github.com/bhouston/vgpu-bench" aria-label="GitHub" title="GitHub">
               <GithubIcon />
             </a>
           </Button>
           <Button variant="ghost" size="icon" asChild>
-            <a href="https://www.npmjs.com/package/webgpu-bench" aria-label="npm" title="npm">
+            <a href="https://www.npmjs.com/package/vgpu-bench" aria-label="npm" title="npm">
               <NpmIcon />
             </a>
           </Button>

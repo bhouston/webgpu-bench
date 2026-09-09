@@ -1,4 +1,4 @@
-import type { DeviceInfo } from 'webgpu-bench';
+import type { DeviceInfo } from 'vgpu-bench';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

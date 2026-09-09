@@ -1,4 +1,4 @@
-import type { BenchmarkResult, DeviceInfo, SuiteProgressEvent } from 'webgpu-bench';
+import type { BenchmarkResult, DeviceInfo, SuiteProgressEvent } from 'vgpu-bench';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -60,7 +60,7 @@ export function BenchmarkSuiteApp() {
     lastFlush.current = 0;
     try {
       // Loaded lazily so `navigator.gpu`/WebGPU types are only touched client-side.
-      const { runSuite } = await import('webgpu-bench');
+      const { runSuite } = await import('vgpu-bench');
       // Rows arrive once per change (setup, every measurement, finish) —
       // several times a second while sampling. Coalesce them and repaint at
       // most once per second so the table updates live without thrashing.

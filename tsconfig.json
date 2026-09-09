@@ -3,5 +3,5 @@
   "compilerOptions": { "composite": true },
   "files": [],
   "include": [],
-  "references": [{ "path": "./packages/webgpu-bench" }, { "path": "./packages/website" }]
+  "references": [{ "path": "./packages/vgpu-bench" }, { "path": "./packages/website" }]
 }
