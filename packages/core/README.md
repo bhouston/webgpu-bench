@@ -1,8 +1,8 @@
-# webgpu-bench
+# webgpu-bench-core
 
-[![npm](https://img.shields.io/npm/v/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
+[![npm](https://img.shields.io/npm/v/webgpu-bench-core.svg)](https://www.npmjs.com/package/webgpu-bench-core)
 [![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
+[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench-core.svg)](https://www.npmjs.com/package/webgpu-bench-core)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 
 A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings — memory
@@ -12,7 +12,7 @@ time in the browser, not a full app or game.
 Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark).
 
 Want to run the suite from the command line instead of a browser? See
-[webgpu-bench-cli](https://www.npmjs.com/package/webgpu-bench-cli).
+[webgpu-bench](https://www.npmjs.com/package/webgpu-bench).
 
 ## Usage
 
@@ -21,7 +21,7 @@ thermal throttling, and yields result rows. `BENCHMARKS` (in `catalog.ts`) is th
 definitions and the default; pass your own `BenchmarkDefinition`s, a filtered subset, or a mix:
 
 ```ts
-import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'webgpu-bench';
+import { runSuite, BENCHMARKS, type BenchmarkDefinition } from 'webgpu-bench-core';
 
 const myKernel: BenchmarkDefinition = {
   id: 'my-kernel',

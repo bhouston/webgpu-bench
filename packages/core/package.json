@@ -1,6 +1,6 @@
 {
-  "name": "webgpu-bench",
-  "version": "0.8.1",
+  "name": "webgpu-bench-core",
+  "version": "0.9.0",
   "description": "Benchmark suite for WebGPU's raw ceilings: memory bandwidth and fp32/fp16/int8 FLOPS.",
   "keywords": [
     "bandwidth",
@@ -20,7 +20,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bhouston/webgpu-bench.git",
-    "directory": "packages/webgpu-bench"
+    "directory": "packages/core"
   },
   "files": [
     "dist"

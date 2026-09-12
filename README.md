@@ -11,9 +11,9 @@ Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/be
 
 ## Packages
 
-- [`packages/webgpu-bench`](packages/webgpu-bench) — the benchmark suite (WGSL shaders, data generation,
-  timing harness, orchestration). Framework-agnostic, browser-only, consumed as TypeScript source. See its
-  [README](packages/webgpu-bench/README.md).
+- [`packages/core`](packages/core) — `webgpu-bench-core`, the benchmark suite (WGSL shaders, data
+  generation, timing harness, orchestration). Framework-agnostic, browser-only, consumed as TypeScript
+  source. See its [README](packages/core/README.md).
 - [`packages/cli`](packages/cli) — `webgpu-bench` command-line runner (WebGPU via Dawn, no browser
   needed). See its [README](packages/cli/README.md).
 

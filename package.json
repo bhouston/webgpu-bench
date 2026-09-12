@@ -15,7 +15,7 @@
     "lint:fix": "oxlint --fix .",
     "tsc": "tsc -b",
     "test": "pnpm -r test",
-    "make-release:webgpu-bench": "node scripts/make-release.mjs packages/webgpu-bench",
+    "make-release:core": "node scripts/make-release.mjs packages/core",
     "make-release:cli": "node scripts/make-release.mjs packages/cli"
   },
   "devDependencies": {

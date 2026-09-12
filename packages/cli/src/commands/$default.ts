@@ -4,7 +4,7 @@ import os from 'node:os';
 import * as Sentry from '@sentry/node';
 import chalk from 'chalk';
 import { create, globals } from 'webgpu';
-import { BENCHMARKS, runSuite, SuiteProgress, type BenchmarkResult, type DeviceInfo } from 'webgpu-bench';
+import { BENCHMARKS, runSuite, SuiteProgress, type BenchmarkResult, type DeviceInfo } from 'webgpu-bench-core';
 import { defineCommand } from 'yargs-file-commands';
 import { formatTable, globToRegExp } from '../format.ts';
 
@@ -20,7 +20,7 @@ const PLATFORM_NAMES: Record<string, string> = { Darwin: 'Mac OS', Windows_NT: '
 const PLATFORM = PLATFORM_NAMES[os.type()] ?? os.type();
 // Parsed server-side by web3dsurvey's bench handler — keep the shape in sync with its CLI_USER_AGENT regex.
 // ponytail: os.release() is the kernel version (Darwin 27.0.0), not the marketing one; good enough to group by.
-const USER_AGENT = `webgpu-bench-cli/${version} (${PLATFORM} ${os.release()}; ${os.arch()}; Node.js ${process.versions.node})`;
+const USER_AGENT = `webgpu-bench/${version} (${PLATFORM} ${os.release()}; ${os.arch()}; Node.js ${process.versions.node})`;
 
 const KEY_LIMITS = [
   'maxBufferSize',
@@ -96,7 +96,7 @@ export const command = defineCommand({
     Object.assign(globalThis, globals);
     Object.defineProperty(navigator, 'gpu', { value: create([]), configurable: true });
 
-    console.error(`${chalk.bold('webgpu-bench-cli')} ${chalk.dim(`v${version}`)}`);
+    console.error(`${chalk.bold('webgpu-bench')} ${chalk.dim(`v${version}`)}`);
 
     const progress = new SuiteProgress(benchmarks.length);
     const results = new Map<string, BenchmarkResult>();

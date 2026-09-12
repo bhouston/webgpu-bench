@@ -71,7 +71,7 @@ test('--json prints device info and results, and --report posts them', async () 
   expect(reports).toHaveLength(1);
   expect(reports[0]).toMatchObject({
     url: '/api/bench?shareable=true',
-    userAgent: expect.stringMatching(/^webgpu-bench-cli\/\d+\.\d+\.\d+ \(/),
+    userAgent: expect.stringMatching(/^webgpu-bench\/\d+\.\d+\.\d+ \(/),
     body: {
       version: expect.any(Number),
       adapterInfo: { vendor: device.vendor },

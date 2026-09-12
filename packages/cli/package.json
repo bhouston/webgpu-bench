@@ -1,6 +1,6 @@
 {
-  "name": "webgpu-bench-cli",
-  "version": "0.8.2",
+  "name": "webgpu-bench",
+  "version": "0.9.0",
   "description": "Run the webgpu-bench GPU benchmark suite from the command line, no browser needed.",
   "keywords": [
     "bandwidth",
@@ -39,7 +39,7 @@
     "@sentry/node": "^10.74.0",
     "chalk": "^5.6.2",
     "webgpu": "^0.6.0",
-    "webgpu-bench": "workspace:*",
+    "webgpu-bench-core": "workspace:*",
     "yargs": "^18.0.0",
     "yargs-file-commands": "^1.2.2"
   },

@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import type { BenchmarkResult, BenchmarkDefinition } from 'webgpu-bench';
+import type { BenchmarkResult, BenchmarkDefinition } from 'webgpu-bench-core';
 
 /** `f16-*` -> /^f16-.*$/ ; `*` matches anything, `?` one character. */
 export function globToRegExp(glob: string): RegExp {

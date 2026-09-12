@@ -1,15 +1,15 @@
-# webgpu-bench-cli
+# webgpu-bench
 
-[![npm](https://img.shields.io/npm/v/webgpu-bench-cli.svg)](https://www.npmjs.com/package/webgpu-bench-cli)
+[![npm](https://img.shields.io/npm/v/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
 [![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench-cli.svg)](https://www.npmjs.com/package/webgpu-bench-cli)
+[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 
-Run the [webgpu-bench](https://www.npmjs.com/package/webgpu-bench) GPU benchmark suite from the command
-line, no browser needed (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)).
+Run the [webgpu-bench-core](https://www.npmjs.com/package/webgpu-bench-core) GPU benchmark suite from the
+command line, no browser needed (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)).
 
 ```sh
-npx webgpu-bench-cli                    # or: npm i -g webgpu-bench-cli && webgpu-bench
+npx webgpu-bench                        # or: npm i -g webgpu-bench && webgpu-bench
 webgpu-bench --filter 'f16-*'           # glob on benchmark ids
 webgpu-bench --no-report                # don't submit the run to web3dsurvey.com
 webgpu-bench --json                     # machine-readable output
@@ -22,7 +22,7 @@ page URL is printed.
 ## Example output
 
 ```
-webgpu-bench-cli v0.8.2
+webgpu-bench v0.9.0
 Vendor        apple
 Architecture  metal-3
 Description   Metal driver on macOS Version 27.0 (Build 26A428)

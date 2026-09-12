@@ -53,9 +53,9 @@ importers:
       webgpu:
         specifier: ^0.6.0
         version: 0.6.0
-      webgpu-bench:
+      webgpu-bench-core:
         specifier: workspace:*
-        version: link:../webgpu-bench
+        version: link:../core
       yargs:
         specifier: ^18.0.0
         version: 18.1.0
@@ -76,7 +76,7 @@ importers:
         specifier: ^0.9.0
         version: 0.9.0(vitest@5.0.0)
 
-  packages/webgpu-bench:
+  packages/core:
     devDependencies:
       '@webgpu/types':
         specifier: ^0.1.69
