@@ -27,6 +27,9 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Install software Vulkan driver (lavapipe) for node-webgpu
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
       - name: Build
         run: pnpm build
 
