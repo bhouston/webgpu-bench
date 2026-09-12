@@ -1,8 +1,0 @@
-node_modules
-.git
-.github
-.output
-.nitro
-.tanstack
-coverage
-*.tsbuildinfo

@@ -98,15 +98,13 @@ best-run headline number.
 
 - `packages/webgpu-bench` — the benchmark suite (WGSL shaders, data generation, timing harness,
   orchestration). Framework-agnostic, browser-only, consumed as TypeScript source.
-- `packages/website` — TanStack Start + Tailwind + shadcn/ui app that runs the suite client-side.
-  Dev server on **port 3500**.
+- `packages/cli` — `webgpu-bench` command-line runner (WebGPU via Dawn, no browser needed).
 
 ## Development
 
 ```bash
 pnpm install
-pnpm dev        # starts the website on http://localhost:3500
-pnpm build      # typecheck webgpu-bench + build the website
+pnpm build
 pnpm lint
 pnpm tsc
 ```

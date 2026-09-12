@@ -7,9 +7,8 @@
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r build",
-    "dev": "pnpm --parallel --filter webgpu-bench --filter website dev",
-    "start": "pnpm --filter website start",
-    "clean": "rimraf dist packages/**/dist packages/**/.output packages/**/.nitro packages/**/.tanstack",
+    "dev": "pnpm -r --parallel dev",
+    "clean": "rimraf dist packages/**/dist",
     "clean:all": "pnpm clean && rimraf node_modules packages/**/node_modules",
     "format": "oxfmt .",
     "lint": "oxlint .",
