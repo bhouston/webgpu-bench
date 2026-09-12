@@ -27,13 +27,14 @@ export async function createPipeline(
   label: string,
   code: string,
   constants?: Record<string, number>,
+  entryPoint = 'main',
 ): Promise<GPUComputePipeline> {
   device.pushErrorScope('validation');
   const module = device.createShaderModule({ label, code });
   const pipeline = device.createComputePipeline({
     label,
     layout: 'auto',
-    compute: { module, entryPoint: 'main', constants },
+    compute: { module, entryPoint, constants },
   });
   const error = await device.popErrorScope();
   if (error) {

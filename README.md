@@ -5,12 +5,13 @@
 
 A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings — memory
 **bandwidth** (read/write) and **FLOPS** (fp32, fp16, int8; scalar/vec4/mat4/matvec) — one operation at a
-time in the browser, not a full app or game.
+time in the browser, plus fixed-work comparisons of shader techniques such as layouts, workgroup sizes,
+reductions, and atomic aggregation. It is not a full app or game benchmark.
 
 Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark).
 
 This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
-operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on *your* GPU, so you can
+operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on _your_ GPU, so you can
 make better-informed decisions when writing shaders — and understand how those costs differ across
 devices. Use it as a CLI or as a library embedded in your own tools.
 

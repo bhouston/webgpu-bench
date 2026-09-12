@@ -24,8 +24,8 @@ export type SamplingStopReason = 'converged' | 'max-rounds' | 'throttled';
 
 export type TimingMethod = 'gpu-timestamp' | 'cpu-wallclock';
 
-/** `bandwidth`: streams memory with ~no compute. `compute`: pure ALU with ~no memory traffic. */
-export type BenchmarkCategory = 'bandwidth' | 'compute';
+/** `bandwidth`: memory probes. `compute`: raw ALU probes. `algorithm`: matched useful-work technique comparisons. */
+export type BenchmarkCategory = 'bandwidth' | 'compute' | 'algorithm';
 
 export type BenchmarkStatus = 'running' | 'ok' | 'skipped' | 'error';
 
@@ -64,10 +64,11 @@ export interface BenchmarkResult {
    * the streamed buffer's rows/cols (after padding to a multiple of 4).
    * For `compute` kernels: thread count / in-shader loop trip count (as
    * calibrated for this GPU, see `SuiteOptions.targetDispatchMs`).
+   * For `algorithm` comparisons: input count / fixed steps (or segment size).
    */
   rows: number;
   cols: number;
-  /** Number of GPU dispatches batched into each timed measurement. */
+  /** Logical benchmark repetitions per measurement (one or more dispatches each). */
   innerIterations: number;
   /** Per-op time (ms) for each kept timed measurement, in the order taken. Length varies: sampling is adaptive. */
   timesMs: number[];

@@ -44,7 +44,7 @@ export interface WorkKnob {
 
 export interface KernelHarness extends MeasurementConfig {
   device: GPUDevice;
-  /** Records `iterations` back-to-back dispatches (same pipeline/bind group) into the pass. */
+  /** Records `iterations` complete benchmark operations (one or more dispatches each) into the pass. */
   encode: (pass: GPUComputePassEncoder, iterations: number) => void;
   useTimestamps: boolean;
   /** Present for kernels whose per-dispatch work can be resized at runtime. */

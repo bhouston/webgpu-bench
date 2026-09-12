@@ -10,6 +10,7 @@ const OPTIONAL_FEATURES: GPUFeatureName[] = [
   'shader-f16' as GPUFeatureName,
   'timestamp-query' as GPUFeatureName,
   'float32-filterable' as GPUFeatureName,
+  'subgroups' as GPUFeatureName,
 ];
 
 // `packed_4x8_integer_dot_product` is a WGSL *language* extension (enabled in

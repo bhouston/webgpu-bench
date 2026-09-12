@@ -1,3 +1,4 @@
+import { TECHNIQUE_BENCHMARKS } from './benchmarks/techniques.ts';
 import {
   BYTES_METRIC,
   FLOPS_METRIC,
@@ -646,4 +647,5 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
     FLOPS_METRIC,
     64,
   ),
+  ...TECHNIQUE_BENCHMARKS,
 ];
