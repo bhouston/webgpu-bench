@@ -11,4 +11,4 @@ coverage
 .DS_Store
 packages/webgpu-bench/.vitest-attachments/
 packages/webgpu-bench/src/__screenshots__/
-packages/webgpu-bench/publish
+publish
