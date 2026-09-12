@@ -1,0 +1,52 @@
+{
+  "name": "webgpu-bench-cli",
+  "version": "0.8.1",
+  "description": "Run the webgpu-bench GPU benchmark suite from the command line, no browser needed.",
+  "keywords": [
+    "bandwidth",
+    "benchmark",
+    "cli",
+    "flops",
+    "gpu",
+    "webgpu"
+  ],
+  "homepage": "https://github.com/bhouston/webgpu-bench",
+  "bugs": {
+    "url": "https://github.com/bhouston/webgpu-bench/issues"
+  },
+  "license": "MIT",
+  "author": "Ben Houston (https://ben3d.ca)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bhouston/webgpu-bench.git",
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "webgpu-bench": "./dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w --preserveWatchOutput --noEmitOnError",
+    "start": "node dist/cli.js",
+    "test": "tsc && vitest run",
+    "test:coverage": "tsc && vitest run --coverage"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.74.0",
+    "chalk": "^5.6.2",
+    "webgpu": "^0.6.0",
+    "webgpu-bench": "^0.8.0",
+    "yargs": "^18.0.0",
+    "yargs-file-commands": "^1.2.2"
+  },
+  "devDependencies": {
+    "@types/yargs": "^17.0.35",
+    "@vitest/coverage-v8": "5.0.0",
+    "@webgpu/types": "^0.1.69",
+    "vitest-command-line": "^0.9.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

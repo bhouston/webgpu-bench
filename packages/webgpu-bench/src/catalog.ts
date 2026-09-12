@@ -94,6 +94,12 @@ import {
   flopsU32FirstLeadingBitWgsl,
   flopsU32ReverseBitsWgsl,
 } from './shaders/flopsBuiltins.ts';
+import {
+  branchNoneWgsl,
+  branchUniformWgsl,
+  branchCoherentWgsl,
+  branchDivergentWgsl,
+} from './shaders/flopsF32Branch.ts';
 import { flopsU8Dp4aWgsl } from './shaders/flopsU8Dp4a.ts';
 import { prepareFlopsBenchmark } from './benchmarks/flopsCommon.ts';
 import {
@@ -584,5 +590,37 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
     OPS_METRIC,
     64,
     true,
+  ),
+  flopsKernel(
+    'branch-none',
+    'branch none',
+    'Baseline for the branch tests: the same eight-chain fp32 FMA body as the other three with no if at all (identical to f32-fma-scalar).',
+    branchNoneWgsl,
+    FLOPS_METRIC,
+    64,
+  ),
+  flopsKernel(
+    'branch-uniform',
+    'branch uniform',
+    'The branch-none body with every unrolled step wrapped in an if/else whose two sides do equal work with different constants. The condition alternates each loop trip but is identical for every lane, so only one side ever executes. The gap against branch-none is the cost of the compare and jump alone.',
+    branchUniformWgsl,
+    FLOPS_METRIC,
+    64,
+  ),
+  flopsKernel(
+    'branch-coherent',
+    'branch coherent',
+    'Same as branch-uniform, but the condition also flips per 64-thread workgroup: lanes within a wave agree while neighbouring workgroups disagree. Tests whether the GPU detects dynamic uniformity at runtime; a gap against branch-uniform means it does not.',
+    branchCoherentWgsl,
+    FLOPS_METRIC,
+    64,
+  ),
+  flopsKernel(
+    'branch-divergent',
+    'branch divergent',
+    'Same as branch-uniform, but the condition flips per lane: adjacent threads take opposite sides, so every wave executes both sides under a mask. The worst case for SIMT; expect roughly half of branch-uniform.',
+    branchDivergentWgsl,
+    FLOPS_METRIC,
+    64,
   ),
 ];

@@ -62,17 +62,16 @@ shared metric defs, and `generateMatVecData` for writing your own `prepare()`.
 Each benchmark isolates one resource — memory read, memory write, or ALU — keeping the others near zero,
 so numbers compare directly against a device's published bandwidth/FLOPS specs.
 
-| Benchmark                                               | What it tests                                                                                                                                                                                 |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read-linear` / `write-linear`                          | Coalesced grid-stride streaming of a 4096×4096 f32 buffer, isolating read or write throughput                                                                                                 |
-| `read-gather-16kb` / `-4mb` / `-64mb`                   | Same byte count, but each load hits a pseudo-random vec4 inside a 16 KB (L1), 4 MB (L2), or 64 MB (DRAM, the whole buffer) window                                                             |
-| `write-scatter-16kb` / `-4mb` / `-64mb`                 | Same byte count, but each store lands on a pseudo-random vec4 inside the same three windows                                                                                                   |
-| `f32-fma-scalar` / `-vec4` / `-mat4` / `-matvec`        | Unrolled independent FMA chains in fp32, at scalar/vec4/mat4/register-resident-matvec granularity                                                                                             |
-| `f16-fma-*`                                             | The same four shapes in `f16` (skipped without `shader-f16`)                                                                                                                                  |
-| `i32-mad-*`                                             | The same four shapes as 32-bit integer multiply-add (WGSL has no `i8` arithmetic)                                                                                                             |
-| `i8-dp4a` / `i8-dp4a-matvec` / `u8-dp4a`                | Packed int8 dot products via `dot4I8Packed` / `dot4U8Packed` (skipped without the feature)                                                                                                    |
-| `u32-shift`                                             | Variable-amount u32 shifts (left and right) cycling through all 32 amounts; the average shift throughput                                                                                      |
-| `branch-none` / `-uniform` / `-coherent` / `-divergent` | The fp32 scalar FMA chains with no branch, or wrapped in an if/else with equal work per side whose condition agrees across all lanes, per workgroup, or flips per lane (SIMT divergence cost) |
+| Benchmark                                        | What it tests                                                                                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `read-linear` / `write-linear`                   | Coalesced grid-stride streaming of a 4096×4096 f32 buffer, isolating read or write throughput                                     |
+| `read-gather-16kb` / `-4mb` / `-64mb`            | Same byte count, but each load hits a pseudo-random vec4 inside a 16 KB (L1), 4 MB (L2), or 64 MB (DRAM, the whole buffer) window |
+| `write-scatter-16kb` / `-4mb` / `-64mb`          | Same byte count, but each store lands on a pseudo-random vec4 inside the same three windows                                       |
+| `f32-fma-scalar` / `-vec4` / `-mat4` / `-matvec` | Unrolled independent FMA chains in fp32, at scalar/vec4/mat4/register-resident-matvec granularity                                 |
+| `f16-fma-*`                                      | The same four shapes in `f16` (skipped without `shader-f16`)                                                                      |
+| `i32-mad-*`                                      | The same four shapes as 32-bit integer multiply-add (WGSL has no `i8` arithmetic)                                                 |
+| `i8-dp4a` / `i8-dp4a-matvec` / `u8-dp4a`         | Packed int8 dot products via `dot4I8Packed` / `dot4U8Packed` (skipped without the feature)                                        |
+| `u32-shift`                                      | Variable-amount u32 shifts (left and right) cycling through all 32 amounts; the average shift throughput                          |
 
 Loop trip counts are runtime values so the shader compiler can't fold them away, and are calibrated per
 GPU (see below) so each dispatch stays short.
