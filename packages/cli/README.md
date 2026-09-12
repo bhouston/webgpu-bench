@@ -8,6 +8,11 @@
 Run the [webgpu-bench-core](https://www.npmjs.com/package/webgpu-bench-core) GPU benchmark suite from the
 command line, no browser needed (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)).
 
+This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
+operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on your GPU, so you can
+make better-informed decisions when writing shaders — and understand how those costs differ across
+devices.
+
 ```sh
 npx webgpu-bench                        # or: npm i -g webgpu-bench && webgpu-bench
 webgpu-bench --filter 'f16-*'           # glob on benchmark ids

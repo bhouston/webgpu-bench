@@ -11,6 +11,11 @@ time in the browser, not a full app or game.
 
 Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark).
 
+This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
+operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on the user's GPU, so
+you can make better-informed decisions when writing shaders — and understand how those costs differ
+across devices.
+
 Want to run the suite from the command line instead of a browser? See
 [webgpu-bench](https://www.npmjs.com/package/webgpu-bench).
 
