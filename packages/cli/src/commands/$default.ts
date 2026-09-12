@@ -12,7 +12,7 @@ const { version } = createRequire(import.meta.url)('../../package.json') as { ve
 
 // web3dsurvey's expected data version — keep in sync with
 // web3dsurvey/packages/shared/src/benchDataVersion.ts (bumped when what's measured changes).
-const BENCH_DATA_VERSION = 30;
+const BENCH_DATA_VERSION = 31;
 const SITE = 'https://web3dsurvey.com';
 const BAR_WIDTH = 40;
 
@@ -135,12 +135,13 @@ export const command = defineCommand({
     }
 
     if (argv.report) {
-      // A failed submission is the maintainer's problem, not the user's: it goes to Sentry, not the terminal.
-      const id = await report(argv.apiHost, info, rows).catch((error: unknown) => {
+      try {
+        const id = await report(argv.apiHost, info, rows);
+        console.log(`\nReported to ${chalk.underline(`${SITE}/benchmark/${id}`)}`);
+      } catch (error) {
         Sentry.captureException(error);
-        return null;
-      });
-      if (id) console.log(`\nReported to ${chalk.underline(`${SITE}/benchmark/${id}`)}`);
+        console.error(chalk.yellow(`\nCould not report to ${SITE}: ${error instanceof Error ? error.message : error}`));
+      }
     }
   },
 });

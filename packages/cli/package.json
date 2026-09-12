@@ -1,6 +1,6 @@
 {
   "name": "webgpu-bench-cli",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Run the webgpu-bench GPU benchmark suite from the command line, no browser needed.",
   "keywords": [
     "bandwidth",
