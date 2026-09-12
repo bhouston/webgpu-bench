@@ -114,8 +114,8 @@ function windowMask(count: number, windowBytes: number): number {
 
 /**
  * Gather-read test: the linear read test's byte count, but every load is a
- * pseudo-random vec4 inside the first `windowBytes` of the buffer. 16 KB
- * stays in L1, a few MB in L2, and the whole buffer is DRAM random access.
+ * pseudo-random vec4 inside the first `windowBytes` of the buffer.
+ * Window sizes describe the access footprint, not a particular cache level.
  */
 export async function prepareGatherRead(
   ctx: GpuContext,
@@ -157,7 +157,7 @@ export async function prepareGatherRead(
   });
 }
 
-/** Scatter-write test: the linear write test's byte count, but every store lands on a pseudo-random vec4 inside the first `windowBytes` of the buffer. */
+/** Writes each vec4 in the clamped power-of-two window once, through a permutation with unique destinations. */
 export async function prepareScatterWrite(
   ctx: GpuContext,
   data: GeneratedData,
@@ -166,14 +166,13 @@ export async function prepareScatterWrite(
   windowBytes: number,
 ): Promise<PreparedBenchmark> {
   const { device } = ctx;
-  const { count, threads, workgroups } = bandwidthShape(data);
+  const mask = windowMask(data.matrix.length / 4, windowBytes);
+  const count = mask + 1;
+  const workgroups = Math.max(1, Math.ceil(count / VEC4S_PER_THREAD / WORKGROUP_SIZE));
+  const threads = workgroups * WORKGROUP_SIZE;
   const pipeline = await createPipeline(device, id, scatterWriteWgsl);
-  const paramsBuf = createUniformBuffer(
-    device,
-    new Uint32Array([count, threads, windowMask(count, windowBytes)]),
-    'params',
-  );
-  const outBuf = createEmptyStorageBuffer(device, data.matrix.byteLength, 'out');
+  const paramsBuf = createUniformBuffer(device, new Uint32Array([count, threads, mask]), 'params');
+  const outBuf = createEmptyStorageBuffer(device, count * 16, 'out');
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
@@ -188,7 +187,7 @@ export async function prepareScatterWrite(
     ctx,
     rows: data.rows,
     cols: data.cols,
-    amountPerOp: data.matrix.byteLength,
+    amountPerOp: count * 16,
     workgroupsPerIteration: [workgroups, 1, 1],
     pipeline,
     bindGroup,

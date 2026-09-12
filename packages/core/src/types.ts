@@ -188,4 +188,5 @@ export interface DeviceInfo {
   supportsF16: boolean;
   supportsI8Dot: boolean;
   supportsTimestampQuery: boolean;
+  supportsFloat32Filterable: boolean;
 }

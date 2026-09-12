@@ -6,7 +6,11 @@ export interface GpuContext {
   info: DeviceInfo;
 }
 
-const OPTIONAL_FEATURES: GPUFeatureName[] = ['shader-f16' as GPUFeatureName, 'timestamp-query' as GPUFeatureName];
+const OPTIONAL_FEATURES: GPUFeatureName[] = [
+  'shader-f16' as GPUFeatureName,
+  'timestamp-query' as GPUFeatureName,
+  'float32-filterable' as GPUFeatureName,
+];
 
 // `packed_4x8_integer_dot_product` is a WGSL *language* extension (enabled in
 // shader source via `enable packed_4x8_integer_dot_product;`), not a
@@ -78,6 +82,7 @@ export async function acquireGpuContext(): Promise<GpuContext> {
     supportsF16: device.features.has('shader-f16' as GPUFeatureName),
     supportsI8Dot: Boolean(navigator.gpu.wgslLanguageFeatures?.has(WGSL_I8_DOT_EXTENSION)),
     supportsTimestampQuery: device.features.has('timestamp-query' as GPUFeatureName),
+    supportsFloat32Filterable: device.features.has('float32-filterable' as GPUFeatureName),
   };
 
   device.addEventListener('uncapturederror', (event) => {

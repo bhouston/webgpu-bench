@@ -7,7 +7,7 @@
  * loop-carried and can't be hoisted. This is the same dot-product-and-
  * accumulate shape as a real matvec/GEMV inner loop, but with no storage
  * buffer traffic at all: it isolates how fast this dtype's dot products run
- * on the ALU once bandwidth is out of the picture. 32 MACs (64 FLOPs) per
+ * on the ALU once bandwidth is out of the picture. 32 multiplies + 32 adds (including forcing): 64 FLOPs per
  * loop iteration.
  */
 export const flopsF16MatvecWgsl = /* wgsl */ `
@@ -44,13 +44,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let w31: vec4<f16> = weights(idx * 8u + 8u);
   var x0: vec4<f16> = vec4<f16>(f16(idx & 255u) * f16(0.001) + f16(0.1), f16(0.2), f16(0.3), f16(0.4));
   var x1: vec4<f16> = vec4<f16>(f16(idx & 255u) * f16(0.001) + f16(0.2), f16(0.4), f16(0.6), f16(0.8));
+  var c = vec4<f16>(0.125, 0.25, 0.375, 0.5);
   for (var i: u32 = 0u; i < params.iterations; i = i + 1u) {
-    let o0 = dot(w00, x0) + dot(w01, x1);
-    let o1 = dot(w10, x0) + dot(w11, x1);
-    let o2 = dot(w20, x0) + dot(w21, x1);
-    let o3 = dot(w30, x0) + dot(w31, x1);
+    let o0 = dot(w00, x0) + dot(w01, x1) + c.x;
+    let o1 = dot(w10, x0) + dot(w11, x1) + c.y;
+    let o2 = dot(w20, x0) + dot(w21, x1) + c.z;
+    let o3 = dot(w30, x0) + dot(w31, x1) + c.w;
     x0 = x1;
     x1 = vec4<f16>(o0, o1, o2, o3);
+    c = c.yzwx; // Nonzero rotating forcing prevents decay to zero.
   }
   out[idx] = f32(x0.x + x0.y + x0.z + x0.w + x1.x + x1.y + x1.z + x1.w);
 }

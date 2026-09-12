@@ -1,7 +1,7 @@
 /**
  * int8 packed-dot-product FLOPS probe: uses the `packed_4x8_integer_dot_product`
  * extension's `dot4I8Packed` builtin directly (two u32s, each four packed
- * signed int8 lanes, one instruction) in a tight accumulation loop, to
+ * signed int8 lanes) in a tight accumulation loop, to
  * isolate the instruction's peak throughput. Eight independent accumulators
  * per thread so the number is throughput, not the latency of one dependent
  * chain. Each `a` is fed back from its own running accumulator every

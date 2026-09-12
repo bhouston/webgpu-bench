@@ -1,19 +1,19 @@
 /**
- * Branch-divergence probes. GPUs have no branch predictor; what an `if`
- * costs depends on whether every lane in a wave takes the same side. Same
+ * Branch-divergence probes. The compiled cost of an `if` depends on
+ * lane agreement as well as compiler lowering. Same
  * eight-chain, 4x-unrolled fp32 FMA body as {@link flopsF32ScalarWgsl}, but
  * each unrolled step is wrapped in an `if` whose two sides do identical
  * work with different constants (`a,b` vs `c,d`), so FLOPs per iteration
  * are fixed at 64 whichever side runs. `none` is the same body with no `if`
- * at all (identical to f32-fma-scalar), the baseline the others read against. Bodies are 8 FMAs each so the compiler keeps a real branch
- * rather than if-converting to select. Only `cond` differs:
+ * at all (identical to f32-fma-scalar), the baseline the others read against. Bodies are 8 multiply-adds each, but the compiler may still predicate
+ * or select coefficients rather than emit a branch. Only `cond` differs:
  *
  * - none:      no branch.
  * - uniform:   `(i & 1u) == 0u`            every lane agrees; one side runs.
  * - coherent:  `((idx / 64u + i) & 1u)`    workgroups disagree, lanes within
  *              one agree; tests runtime detection of dynamic uniformity.
- * - divergent: `((idx + i) & 1u)`          adjacent lanes disagree; every
- *              wave runs both sides masked. Worst case, expect ~half.
+ * - divergent: `((idx + i) & 1u)`          adjacent lanes disagree; the penalty
+ *              depends on how the compiler lowers the condition.
  */
 const step = (a: string, b: string) =>
   ['x0', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7'].map((x) => `      ${x} = ${x} * ${a} + ${b};`).join('\n');

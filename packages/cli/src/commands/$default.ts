@@ -41,7 +41,7 @@ function formatDeviceInfo(info: DeviceInfo): string {
     row('Limits', KEY_LIMITS.map((k) => `${k}=${info.limits[k] ?? '?'}`).join(', ')),
     row(
       'Supports',
-      `f16 ${yesNo(info.supportsF16)}, packed i8 dot ${yesNo(info.supportsI8Dot)}, GPU timestamps ${yesNo(info.supportsTimestampQuery)}`,
+      `f16 ${yesNo(info.supportsF16)}, packed i8 dot ${yesNo(info.supportsI8Dot)}, GPU timestamps ${yesNo(info.supportsTimestampQuery)}, f32 filterable ${yesNo(info.supportsFloat32Filterable)}`,
     ),
     row('Host', `${PLATFORM} ${os.release()} ${os.arch()}, Node.js ${process.versions.node}, Dawn`),
   ].join('\n');

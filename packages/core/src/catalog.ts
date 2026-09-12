@@ -108,6 +108,9 @@ import {
   prepareFlopsF32F16Convert,
   prepareFlopsU32Shift,
 } from './benchmarks/flopsConvert.ts';
+import { textureInterpBuiltinWgsl } from './shaders/textureInterpBuiltin.ts';
+import { textureInterpManualWgsl } from './shaders/textureInterpManual.ts';
+import { prepareTextureInterpBuiltin, prepareTextureInterpManual } from './benchmarks/textureInterp.ts';
 
 export type { BenchmarkContext, BenchmarkDefinition } from './benchmarks/common.ts';
 
@@ -163,9 +166,7 @@ function gatherScatter(suffix: string, windowBytes: number, where: string): Benc
     {
       id: `read-gather-${suffix}`,
       label: `read gather ${suffix}`,
-      description: `Same grid-stride loop and byte count as the linear read, but each thread loads a pseudo-random vec4<f32> from ${where}. ${
-        windowBytes >= 64 * MB ? 'DRAM random-access throughput.' : 'Random access served by cache.'
-      } Loads are independent, so this is throughput, not latency.`,
+      description: `Same grid-stride loop and byte count as the linear read, but each thread loads a pseudo-random vec4<f32> from ${where}. Window size describes the access footprint, not cache residency. Loads are independent, so this is throughput, not latency.`,
       source: gatherReadWgsl,
       category: 'bandwidth',
       metric: BYTES_METRIC,
@@ -174,7 +175,7 @@ function gatherScatter(suffix: string, windowBytes: number, where: string): Benc
     {
       id: `write-scatter-${suffix}`,
       label: `write scatter ${suffix}`,
-      description: `Same grid-stride loop and byte count as the linear write, but each thread stores a vec4<f32> to a pseudo-random slot in ${where}. Colliding stores are a benign data race; the smaller the window the more they contend.`,
+      description: `Writes each vec4 once through a permutation of ${where}, clamped to a power-of-two window fitting the buffer. Every destination has one writer. Reports logical bytes stored per dispatch; smaller windows perform less work.`,
       source: scatterWriteWgsl,
       category: 'bandwidth',
       metric: BYTES_METRIC,
@@ -214,9 +215,31 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
     metric: BYTES_METRIC,
     prepare: bandwidthPrepare(prepareWriteBandwidth),
   },
-  ...gatherScatter('16kb', 16 * KB, 'a 16 KB window (L1-resident)'),
-  ...gatherScatter('4mb', 4 * MB, 'a 4 MB window (L2-resident on most desktop GPUs)'),
+  ...gatherScatter('16kb', 16 * KB, 'a 16 KB window'),
+  ...gatherScatter('4mb', 4 * MB, 'a 4 MB window'),
   ...gatherScatter('64mb', 64 * MB, 'a 64 MB window (the whole default buffer)'),
+  {
+    id: 'texture-interp-builtin',
+    label: 'texture interp (built-in)',
+    description:
+      'Each thread does a straight-line "zoom in" scan across a small rgba32float texture, advancing a quarter of a texel per sample (most samples land between the same or adjacent texel pair). The GPU\'s texture-filtering hardware does the bilinear interpolation via textureSampleLevel. Needs the "float32-filterable" device feature.',
+    source: textureInterpBuiltinWgsl,
+    category: 'bandwidth',
+    metric: BYTES_METRIC,
+    prepare: ({ ctx, harness, computeThreads, computeIterations }) =>
+      prepareTextureInterpBuiltin(ctx, { ...harness, threads: computeThreads, iterations: computeIterations }),
+  },
+  {
+    id: 'texture-interp-manual',
+    label: 'texture interp (manual)',
+    description:
+      'Same zoomed-in linear scan and texture as texture-interp-builtin, but each thread fetches the two neighbouring texels with unfiltered textureLoad and lerps them itself with mix — what the built-in bilinear path is competing against. No sampler, works on any device.',
+    source: textureInterpManualWgsl,
+    category: 'bandwidth',
+    metric: BYTES_METRIC,
+    prepare: ({ ctx, harness, computeThreads, computeIterations }) =>
+      prepareTextureInterpManual(ctx, { ...harness, threads: computeThreads, iterations: computeIterations }),
+  },
   {
     id: 'f32-fma-scalar',
     label: 'fp32 scalar FMA',
@@ -231,7 +254,7 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
     id: 'f32-fma-vec4',
     label: 'fp32 vec4 FMA',
     description:
-      'Eight independent FMA chains held in vec4<f32> registers, unrolled 4x: the fp32 scalar test with every chain 4 lanes wide. On scalar-SIMT GPUs (Apple, NVIDIA, AMD) each step is 4 scalar FMAs, so this should match the scalar number; a gap means vector ops cost extra.',
+      'Eight independent FMA chains held in vec4<f32> registers, unrolled 4x: the fp32 scalar test with every chain 4 lanes wide. Compare with scalar throughput; differences can reflect compiler lowering, live state, and scheduling, not just vector operation cost.',
     source: flopsF32Vec4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
@@ -241,7 +264,7 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
     id: 'f32-fma-mat4',
     label: 'fp32 mat4 FMA',
     description:
-      'x = m * x + c chained in a register with a mat4x4<f32> (a bounded contraction so it stays numerically stable): 16 FMAs per step with plenty of independent work, exercising the full mat4 x vec4 multiply.',
+      'x = m * x + c chained in a register with a mat4x4<f32> (a contracting matrix and rotating nonzero forcing keep it stable): 16 FMAs per step with plenty of independent work, exercising the full mat4 x vec4 multiply.',
     source: flopsF32Mat4Wgsl,
     category: 'compute',
     metric: FLOPS_METRIC,
@@ -529,7 +552,7 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
   flopsKernel(
     'f32-fma-builtin',
     'fp32 fma() builtin',
-    'The fp32 scalar test with the explicit fma(x, a, b) builtin in place of x * a + b. WGSL lets the compiler contract the latter into an FMA; if this number matches f32-fma-scalar, it does.',
+    'The fp32 scalar test with the explicit fma(x, a, b) builtin in place of x * a + b. WGSL lets the compiler contract the latter into an FMA; similar timing is consistent with similar lowering but does not prove contraction.',
     flopsF32FmaWgsl,
     FLOPS_METRIC,
     64,
@@ -602,7 +625,7 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
   flopsKernel(
     'branch-uniform',
     'branch uniform',
-    'The branch-none body with every unrolled step wrapped in an if/else whose two sides do equal work with different constants. The condition alternates each loop trip but is identical for every lane, so only one side ever executes. The gap against branch-none is the cost of the compare and jump alone.',
+    'The branch-none body with every unrolled step wrapped in an if/else whose two sides do equal work with different constants. The condition alternates each loop trip but is identical for every lane, so every invocation chooses the same source branch. The gap against branch-none includes condition handling and any compiler transformations; it does not isolate a native jump cost.',
     branchUniformWgsl,
     FLOPS_METRIC,
     64,
@@ -610,7 +633,7 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
   flopsKernel(
     'branch-coherent',
     'branch coherent',
-    'Same as branch-uniform, but the condition also flips per 64-thread workgroup: lanes within a wave agree while neighbouring workgroups disagree. Tests whether the GPU detects dynamic uniformity at runtime; a gap against branch-uniform means it does not.',
+    'Same as branch-uniform, but the condition also flips per 64-thread workgroup: lanes within a wave agree while neighbouring workgroups disagree. Compares workgroup-coherent conditions with globally uniform conditions; timing alone does not identify the native control flow.',
     branchCoherentWgsl,
     FLOPS_METRIC,
     64,
@@ -618,7 +641,7 @@ export const BENCHMARKS: readonly BenchmarkDefinition[] = [
   flopsKernel(
     'branch-divergent',
     'branch divergent',
-    'Same as branch-uniform, but the condition flips per lane: adjacent threads take opposite sides, so every wave executes both sides under a mask. The worst case for SIMT; expect roughly half of branch-uniform.',
+    'Same as branch-uniform, but the condition flips per lane: adjacent threads take opposite sides. Measures the compiled cost of this divergent condition; predication or other compiler transformations can change the penalty.',
     branchDivergentWgsl,
     FLOPS_METRIC,
     64,

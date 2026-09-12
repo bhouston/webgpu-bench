@@ -6,8 +6,8 @@
  * LCG's low bits cycle), so adjacent threads touch unrelated cache lines and
  * the loads within a thread stay independent of each other (throughput, not
  * latency). The same total number of vec4s is read as the linear test, so
- * the two compare directly; the window size selects which level of the
- * memory hierarchy absorbs the randomness (L1, L2, or DRAM).
+ * the two compare directly; the window size controls the access footprint. Cache residency is
+ * device- and workload-dependent.
  */
 export const gatherReadWgsl = /* wgsl */ `
 struct Params {
