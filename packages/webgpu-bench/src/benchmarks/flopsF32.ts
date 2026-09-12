@@ -11,7 +11,7 @@ export function prepareFlopsF32Scalar(ctx: GpuContext, harness: FlopsHarnessConf
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-scalar',
+      id: 'f32-fma-scalar',
       wgsl: flopsF32ScalarWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -25,7 +25,7 @@ export function prepareFlopsF32Vec4(ctx: GpuContext, harness: FlopsHarnessConfig
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-vec4',
+      id: 'f32-fma-vec4',
       wgsl: flopsF32Vec4Wgsl,
       flopsPerIteration: 256,
       defaultIterations: 256,
@@ -39,7 +39,7 @@ export function prepareFlopsF32Mat4(ctx: GpuContext, harness: FlopsHarnessConfig
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-mat4',
+      id: 'f32-fma-mat4',
       wgsl: flopsF32Mat4Wgsl,
       flopsPerIteration: 32,
       defaultIterations: 1024,
@@ -53,7 +53,7 @@ export function prepareFlopsF32Matvec(ctx: GpuContext, harness: FlopsHarnessConf
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-matvec',
+      id: 'f32-fma-matvec',
       wgsl: flopsF32MatvecWgsl,
       flopsPerIteration: 64,
       defaultIterations: 512,

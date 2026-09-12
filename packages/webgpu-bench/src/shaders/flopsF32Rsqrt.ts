@@ -4,7 +4,7 @@
  * positive for x > 0, so `x` is bounded below by `b` from the second step
  * on — always positive, never blows up. This is the op behind every
  * `normalize()`: most GPUs have a dedicated fast-rsqrt path distinct from
- * sqrt-then-divide, which is what the gap against flops-f32-sqrt shows. 64
+ * sqrt-then-divide, which is what the gap against f32-sqrt shows. 64
  * ops (32 rsqrts + 32 adds) per loop iteration, same MAC-as-2 convention as
  * the multiply version.
  */

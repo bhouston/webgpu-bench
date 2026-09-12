@@ -31,7 +31,7 @@ export function prepareFlopsF32Div(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-div',
+      id: 'f32-div',
       wgsl: flopsF32DivWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -45,7 +45,7 @@ export function prepareFlopsI32Div(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i32-div',
+      id: 'i32-div',
       wgsl: flopsI32DivWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -59,7 +59,7 @@ export function prepareFlopsF32Sqrt(ctx: GpuContext, harness: FlopsHarnessConfig
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-sqrt',
+      id: 'f32-sqrt',
       wgsl: flopsF32SqrtWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -73,7 +73,7 @@ export function prepareFlopsF32Rsqrt(ctx: GpuContext, harness: FlopsHarnessConfi
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-rsqrt',
+      id: 'f32-rsqrt',
       wgsl: flopsF32RsqrtWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -87,7 +87,7 @@ export function prepareFlopsF32Pow(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-pow',
+      id: 'f32-pow',
       wgsl: flopsF32PowWgsl,
       flopsPerIteration: 64,
       defaultIterations: 128,
@@ -101,7 +101,7 @@ export function prepareFlopsF32Sincos(ctx: GpuContext, harness: FlopsHarnessConf
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-sincos',
+      id: 'f32-sincos',
       wgsl: flopsF32SincosWgsl,
       flopsPerIteration: 64,
       defaultIterations: 128,
@@ -115,7 +115,7 @@ export function prepareFlopsF32Log(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f32-log',
+      id: 'f32-log',
       wgsl: flopsF32LogWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -129,7 +129,7 @@ export function prepareFlopsF16Div(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f16-div',
+      id: 'f16-div',
       wgsl: flopsF16DivWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -144,7 +144,7 @@ export function prepareFlopsF16Sqrt(ctx: GpuContext, harness: FlopsHarnessConfig
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f16-sqrt',
+      id: 'f16-sqrt',
       wgsl: flopsF16SqrtWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -159,7 +159,7 @@ export function prepareFlopsF16Rsqrt(ctx: GpuContext, harness: FlopsHarnessConfi
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f16-rsqrt',
+      id: 'f16-rsqrt',
       wgsl: flopsF16RsqrtWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -174,7 +174,7 @@ export function prepareFlopsF16Pow(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f16-pow',
+      id: 'f16-pow',
       wgsl: flopsF16PowWgsl,
       flopsPerIteration: 64,
       defaultIterations: 128,
@@ -189,7 +189,7 @@ export function prepareFlopsF16Sincos(ctx: GpuContext, harness: FlopsHarnessConf
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f16-sincos',
+      id: 'f16-sincos',
       wgsl: flopsF16SincosWgsl,
       flopsPerIteration: 64,
       defaultIterations: 128,
@@ -204,7 +204,7 @@ export function prepareFlopsF16Log(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-f16-log',
+      id: 'f16-log',
       wgsl: flopsF16LogWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,

@@ -196,7 +196,7 @@ describe('runSampling', () => {
     expect(String((results.get('zero')!.error as Error).message)).toMatch(/did no work/);
   });
 
-  it('estimates remaining units from each benchmark\'s own progress, shrinking as benchmarks converge', async () => {
+  it("estimates remaining units from each benchmark's own progress, shrinking as benchmarks converge", async () => {
     const events: SuiteProgressEvent[] = [];
     // cfg: minRounds=3, stableRounds=2 (defaults) → converges once the best hasn't improved over 2 kept samples.
     const quick = scripted('quick', [10, 10, 10]);

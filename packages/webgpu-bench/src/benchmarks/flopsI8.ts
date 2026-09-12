@@ -13,7 +13,7 @@ export function prepareFlopsI8Scalar(ctx: GpuContext, harness: FlopsHarnessConfi
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i8-scalar',
+      id: 'i32-mad-scalar',
       wgsl: flopsI8ScalarWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,
@@ -27,7 +27,7 @@ export function prepareFlopsI8Vec4(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i8-vec4',
+      id: 'i32-mad-vec4',
       wgsl: flopsI8Vec4Wgsl,
       flopsPerIteration: 256,
       defaultIterations: 256,
@@ -41,7 +41,7 @@ export function prepareFlopsI8Mat4(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i8-mat4',
+      id: 'i32-mad-mat4',
       wgsl: flopsI8Mat4Wgsl,
       flopsPerIteration: 32,
       defaultIterations: 1024,
@@ -55,7 +55,7 @@ export function prepareFlopsI8Matvec(ctx: GpuContext, harness: FlopsHarnessConfi
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i8-matvec',
+      id: 'i32-mad-matvec',
       wgsl: flopsI8MatvecWgsl,
       flopsPerIteration: 64,
       defaultIterations: 512,
@@ -72,7 +72,7 @@ export function prepareFlopsI8MatvecDp4a(
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i8-matvec-dp4a',
+      id: 'i8-dp4a-matvec',
       wgsl: flopsI8MatvecDp4aWgsl,
       flopsPerIteration: 64,
       defaultIterations: 512,
@@ -87,7 +87,7 @@ export function prepareFlopsI8Dp4a(ctx: GpuContext, harness: FlopsHarnessConfig 
   return prepareFlopsBenchmark(
     ctx,
     {
-      id: 'flops-i8-dp4a',
+      id: 'i8-dp4a',
       wgsl: flopsI8Dp4aWgsl,
       flopsPerIteration: 64,
       defaultIterations: 256,

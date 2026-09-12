@@ -72,6 +72,24 @@ const TIMESTAMP_STRIKES_TO_DEMOTE = 2;
 const OVERHEAD_PROBES = 3;
 
 /**
+ * One timer per device, shared by every sampler on it. Metal caps a device
+ * at 32 timestamp query sets: with one per sampler, the 33rd benchmark in a
+ * suite gets an invalid query set, every one of its submits is silently
+ * dropped, and batch sizing runs away to `maxIterations`. Measurements are
+ * strictly sequential (each awaits its readback before the next is
+ * encoded), so sharing is safe. Freed with the device.
+ */
+const timers = new WeakMap<GPUDevice, GpuTimer>();
+function sharedTimer(device: GPUDevice, supported: boolean): GpuTimer {
+  let timer = timers.get(device);
+  if (!timer) {
+    timer = new GpuTimer(device, supported);
+    timers.set(device, timer);
+  }
+  return timer;
+}
+
+/**
  * Takes individual timed measurements of one kernel on demand, so a
  * scheduler can interleave many kernels round-robin (see `runSampling`)
  * instead of hammering one kernel until it converges. Holds the GPU timer
@@ -91,7 +109,7 @@ export class KernelSampler {
   private overheadMs = 0;
 
   constructor(private readonly h: KernelHarness) {
-    this.timer = new GpuTimer(h.device, h.useTimestamps);
+    this.timer = sharedTimer(h.device, h.useTimestamps);
     this.trustTimestamps = this.timer.supported;
   }
 
@@ -189,9 +207,8 @@ export class KernelSampler {
     return (gpuMs ?? wallMs) / this.iterations;
   }
 
-  destroy(): void {
-    this.timer.destroy();
-  }
+  /** Nothing to release: the timer is shared per device and freed with it. Kept so callers' lifecycle stays the same. */
+  destroy(): void {}
 
   /**
    * Submits `iterations` dispatches as one command buffer and waits for

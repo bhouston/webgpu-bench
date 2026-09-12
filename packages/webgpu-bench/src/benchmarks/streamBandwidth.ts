@@ -4,6 +4,8 @@ import { createUniformBuffer, createStorageBuffer, createEmptyStorageBuffer } fr
 import { createPipeline, prepareKernelBenchmark, type HarnessConfig, type PreparedBenchmark } from './common.ts';
 import { streamReadWgsl } from '../shaders/streamRead.ts';
 import { streamWriteWgsl } from '../shaders/streamWrite.ts';
+import { gatherReadWgsl } from '../shaders/gatherRead.ts';
+import { scatterWriteWgsl } from '../shaders/scatterWrite.ts';
 
 const WORKGROUP_SIZE = 256;
 /**
@@ -50,7 +52,7 @@ export async function prepareReadBandwidth(
   });
 
   return prepareKernelBenchmark({
-    id: 'read-bandwidth',
+    id: 'read-linear',
     category: 'bandwidth',
     ctx,
     rows: data.rows,
@@ -88,7 +90,100 @@ export async function prepareWriteBandwidth(
   });
 
   return prepareKernelBenchmark({
-    id: 'write-bandwidth',
+    id: 'write-linear',
+    category: 'bandwidth',
+    ctx,
+    rows: data.rows,
+    cols: data.cols,
+    amountPerOp: data.matrix.byteLength,
+    workgroupsPerIteration: [workgroups, 1, 1],
+    pipeline,
+    bindGroup,
+    ...harness,
+  });
+}
+
+/**
+ * Index mask for a gather/scatter window of `windowBytes` (a power of two),
+ * clamped to the largest power-of-two number of vec4s that fits the buffer.
+ */
+function windowMask(count: number, windowBytes: number): number {
+  const fit = 2 ** Math.floor(Math.log2(count));
+  return Math.min(windowBytes / 16, fit) - 1;
+}
+
+/**
+ * Gather-read test: the linear read test's byte count, but every load is a
+ * pseudo-random vec4 inside the first `windowBytes` of the buffer. 16 KB
+ * stays in L1, a few MB in L2, and the whole buffer is DRAM random access.
+ */
+export async function prepareGatherRead(
+  ctx: GpuContext,
+  data: GeneratedData,
+  harness: HarnessConfig,
+  id: string,
+  windowBytes: number,
+): Promise<PreparedBenchmark> {
+  const { device } = ctx;
+  const { count, threads, workgroups } = bandwidthShape(data);
+  const pipeline = await createPipeline(device, id, gatherReadWgsl);
+  const paramsBuf = createUniformBuffer(
+    device,
+    new Uint32Array([count, threads, windowMask(count, windowBytes)]),
+    'params',
+  );
+  const dataBuf = createStorageBuffer(device, data.matrix, 'data');
+  const outBuf = createEmptyStorageBuffer(device, threads * 4, 'out');
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: paramsBuf } },
+      { binding: 1, resource: { buffer: dataBuf } },
+      { binding: 2, resource: { buffer: outBuf } },
+    ],
+  });
+
+  return prepareKernelBenchmark({
+    id,
+    category: 'bandwidth',
+    ctx,
+    rows: data.rows,
+    cols: data.cols,
+    amountPerOp: data.matrix.byteLength,
+    workgroupsPerIteration: [workgroups, 1, 1],
+    pipeline,
+    bindGroup,
+    ...harness,
+  });
+}
+
+/** Scatter-write test: the linear write test's byte count, but every store lands on a pseudo-random vec4 inside the first `windowBytes` of the buffer. */
+export async function prepareScatterWrite(
+  ctx: GpuContext,
+  data: GeneratedData,
+  harness: HarnessConfig,
+  id: string,
+  windowBytes: number,
+): Promise<PreparedBenchmark> {
+  const { device } = ctx;
+  const { count, threads, workgroups } = bandwidthShape(data);
+  const pipeline = await createPipeline(device, id, scatterWriteWgsl);
+  const paramsBuf = createUniformBuffer(
+    device,
+    new Uint32Array([count, threads, windowMask(count, windowBytes)]),
+    'params',
+  );
+  const outBuf = createEmptyStorageBuffer(device, data.matrix.byteLength, 'out');
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: paramsBuf } },
+      { binding: 1, resource: { buffer: outBuf } },
+    ],
+  });
+
+  return prepareKernelBenchmark({
+    id,
     category: 'bandwidth',
     ctx,
     rows: data.rows,

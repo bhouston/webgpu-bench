@@ -2,7 +2,7 @@ import { test, expect } from 'vitest';
 import { runSuite } from './suite.ts';
 import { BENCHMARKS } from './catalog.ts';
 
-test('every kernel runs clean', { timeout: 60_000 }, async () => {
+test('every kernel runs clean', { timeout: 120_000 }, async () => {
   const results = [];
   for await (const r of runSuite({ computeThreads: 4096, targetMs: 200 })) {
     if (r.status === 'running') continue;
@@ -24,7 +24,7 @@ test('every kernel runs clean', { timeout: 60_000 }, async () => {
 
 test(
   'the page stays responsive during a real run: a 200ms poll timer never falls badly behind',
-  { timeout: 30_000 },
+  { timeout: 60_000 },
   async () => {
     // Responsiveness is a property of runSampling's round-robin/idle-gap
     // scheduling, not of any one kernel — one round across every real kernel

@@ -51,8 +51,11 @@ export async function acquireGpuContext(): Promise<GpuContext> {
   const device = await adapter.requestDevice({ requiredFeatures, requiredLimits });
 
   const limits: Record<string, number> = {};
-  for (const key of Object.keys(device.limits) as (keyof GPUSupportedLimits)[]) {
-    const value = device.limits[key];
+  // `for...in`, not Object.keys: GPUSupportedLimits' values are getters on
+  // its prototype (in browsers and Dawn's node binding alike), so they're
+  // inherited-enumerable, not own properties.
+  for (const key in device.limits) {
+    const value = device.limits[key as keyof GPUSupportedLimits];
     if (typeof value === 'number') limits[key] = value;
   }
 

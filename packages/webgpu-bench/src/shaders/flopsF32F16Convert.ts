@@ -2,7 +2,7 @@
  * fp32<->fp16 conversion FLOPS probe, using the core `pack2x16float` /
  * `unpack2x16float` builtins (round each of a vec2<f32>'s lanes to fp16 and
  * back) — these don't need the `shader-f16` device feature, unlike the
- * flops-f16-* kernels which compute *in* f16. Eight independent vec2<f32>
+ * f16-* kernels which compute *in* f16. Eight independent vec2<f32>
  * chains, unrolled 4x; each step packs, unpacks, then a vec2 FMA keeps the
  * chain moving and bounded. Counted as 2 ops per lane (one f32 -> f16
  * convert and one back; the FMA is not counted): 128 ops per loop iteration.

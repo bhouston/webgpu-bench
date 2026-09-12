@@ -19,7 +19,10 @@ function formatThroughput(value: number | undefined, unit: string): string {
 // GOP/s for them. Rather than hand-editing every label string, strip the
 // stale unit word here and let the metric column's unit speak for itself.
 function displayName(label: string): string {
-  return label.replace(/\s*\b(?:FLOPS?|ops)\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+  return label
+    .replace(/\s*\b(?:FLOPS?|ops)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 /**

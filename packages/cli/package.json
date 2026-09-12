@@ -1,15 +1,14 @@
 {
-  "name": "webgpu-bench",
+  "name": "webgpu-bench-cli",
   "version": "0.8.0",
-  "description": "Benchmark suite for WebGPU's raw ceilings: memory bandwidth and fp32/fp16/int8 FLOPS.",
+  "description": "Run the webgpu-bench GPU benchmark suite from the command line, no browser needed.",
   "keywords": [
     "bandwidth",
     "benchmark",
+    "cli",
     "flops",
     "gpu",
-    "profiler",
-    "webgpu",
-    "wgsl"
+    "webgpu"
   ],
   "homepage": "https://github.com/bhouston/webgpu-bench",
   "bugs": {
@@ -20,22 +19,31 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bhouston/webgpu-bench.git",
-    "directory": "packages/webgpu-bench"
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "webgpu-bench": "./dist/cli.js"
   },
   "files": [
     "dist"
   ],
   "type": "module",
-  "sideEffects": false,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w --preserveWatchOutput --noEmitOnError",
-    "test": "vitest run",
-    "test:browser": "vitest run --project browser"
+    "start": "node dist/cli.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.74.0",
+    "chalk": "^5.6.2",
+    "webgpu": "^0.6.0",
+    "webgpu-bench": "workspace:*",
+    "yargs": "^18.0.0",
+    "yargs-file-commands": "^1.2.2"
   },
   "devDependencies": {
+    "@types/yargs": "^17.0.35",
     "@webgpu/types": "^0.1.69"
   },
   "engines": {

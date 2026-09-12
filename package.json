@@ -2,8 +2,8 @@
   "name": "webgpu-bench-monorepo",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r build",
@@ -16,7 +16,8 @@
     "lint:fix": "oxlint --fix .",
     "tsc": "tsc -b",
     "test": "pnpm -r test",
-    "make-release": "node scripts/make-release.mjs packages/webgpu-bench"
+    "make-release": "node scripts/make-release.mjs packages/webgpu-bench",
+    "make-release:cli": "node scripts/make-release.mjs packages/cli"
   },
   "devDependencies": {
     "@types/node": "^24",
