@@ -30,19 +30,19 @@ node scripts/profile-suite.mjs --browser webkit \
 
 ## Sequence and decisions
 
-| Step | Idea from brainstorm                      | Status                 | Evidence / decision                                                              |
-| ---- | ----------------------------------------- | ---------------------- | -------------------------------------------------------------------------------- |
-| 0    | Runtime breakdown and baseline            | Complete               | 206 browser tests pass; profiling harness added.                                 |
-| 1    | Shorter precision-aware measurements (#1) | Rejected for now       | 20 ms increased cooldowns, runtime and score instability in both browsers.       |
-| 2    | Work-proportional idle gaps (#2)          | Deferred               | 50 ms improved runtime but failed the WebKit score screen.                       |
-| 3    | Share empty-submit overhead probes (#4)   | Rejected               | Runtime benefit was marginal; one WebKit score shifted beyond the screen.        |
-| 4    | Async pipeline preparation (#6)           | Retained for stability | Fully compiled pipelines before calibration; no demonstrated warm-run speedup.   |
-| 5    | Reuse calibration/warmup work (#3)        | Deferred               | Removing warmup saves 11–17%, but WebKit score equivalence remains inconclusive. |
-| 6    | Encode during idle (#8)                   | Deferred               | WebKit encoding consumes under 1% of representative suite time.                  |
-| 7    | Cache calibration hints (#5)              | Deferred               | No first-run benefit; stale hints need bounded device-local validation.          |
-| 8    | Share immutable buffers (#7)              | Pending                | Check remaining setup cost and cache effects.                                    |
-| 9    | Statistical stopping (#9)                 | Pending                | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum. |
-| 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                   |
+| Step | Idea from brainstorm                      | Status                 | Evidence / decision                                                                |
+| ---- | ----------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| 0    | Runtime breakdown and baseline            | Complete               | 206 browser tests pass; profiling harness added.                                   |
+| 1    | Shorter precision-aware measurements (#1) | Rejected for now       | 20 ms increased cooldowns, runtime and score instability in both browsers.         |
+| 2    | Work-proportional idle gaps (#2)          | Deferred               | 50 ms improved runtime but failed the WebKit score screen.                         |
+| 3    | Share empty-submit overhead probes (#4)   | Rejected               | Runtime benefit was marginal; one WebKit score shifted beyond the screen.          |
+| 4    | Async pipeline preparation (#6)           | Retained for stability | Fully compiled pipelines before calibration; no demonstrated warm-run speedup.     |
+| 5    | Reuse calibration/warmup work (#3)        | Deferred               | Removing warmup saves 11–17%, but WebKit score equivalence remains inconclusive.   |
+| 6    | Encode during idle (#8)                   | Deferred               | WebKit encoding consumes under 1% of representative suite time.                    |
+| 7    | Cache calibration hints (#5)              | Deferred               | No first-run benefit; stale hints need bounded device-local validation.            |
+| 8    | Share immutable buffers (#7)              | Trial rejected         | Lazy fixture saves setup but not consistent end-to-end time; GPU sharing deferred. |
+| 9    | Statistical stopping (#9)                 | Pending                | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum.   |
+| 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                     |
 
 ## Results
 
@@ -166,3 +166,25 @@ currently starts small and caps growth at 4×, the safeguard added after the fre
 Jumping to a stale batch size would weaken that safeguard. A safe repeat-run
 hint design may be useful, but was not implemented or measured in this pass.
 This is a design deferral, not evidence that caching can never help.
+
+### Step 8 — avoid unused fixture generation; defer GPU buffer sharing
+
+Rather than sharing mutable GPU resources between kernels, the trial generated
+its deterministic CPU matrix/vector fixture on first access. Compute-only filtered
+runs avoided generating the unused 4096 × 4096 Float32 matrix (64 MiB). Bandwidth
+kernels received the same bytes and the same shared CPU object as before. The full
+catalog still needs this fixture, so this is specifically a filtered-run improvement.
+GPU buffer sharing is deferred: setup is roughly 1% of the warm representative
+suite, and shared allocations could change cache behavior or custom benchmark ownership.
+
+Unit tests check that unused fixtures are not generated and that padding, contents
+and identity across preparations remain correct. All 38 unit tests, type checking
+and lint passed (the two existing CLI warnings remain). All 206 browser tests also passed before reverting the trial.
+
+Three alternating pairs of a filtered workgroup-64 run: WebKit median 0.328 to
+0.306 s (-6.7%), Chromium 0.312 to 0.465 s (+49.1%). Median score shifts were
+-3.24% / -0.14%, respectively. Candidate batch sizes sometimes nearly doubled
+(about 8,000 versus 4,096 dispatches), overwhelming the saved setup time. One
+WebKit candidate also took 0.593 s. The deterministic allocation saving does not
+establish a reliable start-to-finish gain, so the fixture trial and its two new unit tests were reverted.
+Reports: `lazy-webkit.json`, `lazy-chromium.json`.
