@@ -34,7 +34,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | ---- | ----------------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
 | 0    | Runtime breakdown and baseline            | Complete           | 206 browser tests pass; profiling harness added.                                 |
 | 1    | Shorter precision-aware measurements (#1) | Rejected for now   | 20 ms increased cooldowns, runtime and score instability in both browsers.       |
-| 2    | Work-proportional idle gaps (#2)          | Pending            | Measure score and throttling effects before changing rest.                       |
+| 2    | Work-proportional idle gaps (#2)          | Deferred           | 50 ms improved runtime but failed the WebKit score screen.                       |
 | 3    | Share empty-submit overhead probes (#4)   | Pending            | Preserve per-sample timestamp cross-checks.                                      |
 | 4    | Async pipeline preparation (#6)           | Pending            | Preserve error reporting and isolate compilation from measurement.               |
 | 5    | Reuse calibration/warmup work (#3)        | Pending            | Avoid selecting headline samples based on favorable calibration timings.         |
@@ -79,3 +79,17 @@ a scheduler classification, not direct evidence of actual thermal throttling.
 No default or test workload was changed. Adaptive shortening needs a reliable
 precision/timer-method eligibility gate first; a blanket 20 ms default is rejected.
 Raw reports: `short-webkit.json`, `short-chromium.json` in the temporary results directory.
+
+### Step 2 — shorter idle gaps: defer changing the default
+
+A 50 ms gap versus 100 ms reduced the 11-kernel ABBA median from 8.616 to 6.671 s
+in WebKit (-22.6%) and 8.360 to 7.293 s in Chromium (-12.8%). No cooldowns fired.
+Chromium median score shifts stayed within 2.85%. WebKit had a large FP16 outlier
+and layout/reduction differences near 5%.
+
+A three-pair WebKit follow-up on the outliers removed the FP16 anomaly, but
+layout-soa still shifted -7.02%. Thus the speedup is real, but score equivalence
+has not passed the agreed screen. Keep the existing configurable `idleMs` and
+100 ms default. A work-proportional policy remains deferred, rather than assuming
+these constant-gap results justify changing rest on every device.
+Reports: `idle-webkit.json`, `idle-chromium.json`, `idle-confirm-webkit.json`.
