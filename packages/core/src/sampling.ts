@@ -68,6 +68,8 @@ export interface RunSamplingOptions extends SamplingConfig {
   onProgress?: (event: SuiteProgressEvent) => void;
   /** Injectable for tests; defaults to a real `setTimeout` sleep. */
   sleep?: (ms: number) => Promise<void>;
+  /** Injectable wall clock for progress telemetry; does not affect GPU measurements. */
+  now?: () => number;
 }
 
 const isActive = (s: SampleState) => s.stopReason === undefined && s.error === undefined;
@@ -93,11 +95,14 @@ const realSleep = (ms: number) =>
  * `waitVisible` blocks until the page is showing; `hiddenSince` reports
  * whether it went hidden at any point after the last `mark()`.
  */
-function visibilityGuard() {
+function visibilityGuard(onPause: () => void) {
   const doc = typeof document === 'undefined' ? undefined : document;
   let hidden = false;
   const onChange = () => {
-    if (doc?.hidden) hidden = true;
+    if (doc?.hidden) {
+      hidden = true;
+      onPause();
+    }
   };
   doc?.addEventListener('visibilitychange', onChange);
   return {
@@ -209,6 +214,7 @@ export async function runSampling(
 ): Promise<Map<string, SampleStateSnapshot>> {
   const cfg = resolveSamplingConfig(options);
   const sleep = options.sleep ?? realSleep;
+  const now = options.now ?? (() => performance.now());
   const onUpdate = options.onUpdate ?? (() => {});
   const onProgress = options.onProgress ?? (() => {});
 
@@ -218,7 +224,7 @@ export async function runSampling(
     states.set(b.id, { id: b.id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY });
     samplers.set(b.id, b);
   }
-  const visibility = visibilityGuard();
+  const visibility = visibilityGuard(() => onProgress({ type: 'pause' }));
   let cooldowns = 0;
   let calibrated = false;
   try {
@@ -235,20 +241,30 @@ export async function runSampling(
         (sum, s) => sum + Math.max(cfg.minRounds + cfg.stableRounds - s.timesMs.length, 1),
         0,
       );
-      onProgress({ type: 'round', round, active: active.length, estimatedRemainingUnits });
+      onProgress({
+        type: 'round',
+        round,
+        active: active.length,
+        estimatedRemainingUnits,
+        activeIds: active.map((s) => s.id),
+        sampling: cfg,
+      });
 
       const roundStates: SampleState[] = [];
       const roundThrottled: boolean[] = [];
       let first = true;
       for (const state of active) {
         const sampler = samplers.get(state.id)!;
+        let durationMs = 0;
         try {
           if (!first && cfg.idleMs > 0) await sleep(cfg.idleMs);
           first = false;
           await visibility.waitVisible();
           visibility.mark();
           if (!calibrated) await sampler.calibrate();
+          const sampleStart = now();
           const ms = await sampler.sample();
+          durationMs = now() - sampleStart;
           // Hidden at any point during the measurement: not a device number. Drop it and retry next round.
           if (visibility.hiddenSince()) continue;
           if (!Number.isFinite(ms) || ms <= 0) {
@@ -262,6 +278,14 @@ export async function runSampling(
         } catch (error) {
           state.error = error;
         }
+        onProgress({
+          type: 'sample',
+          id: state.id,
+          durationMs,
+          timesMs: [...state.timesMs],
+          throttledMs: [...state.throttledMs],
+          done: !isActive(state),
+        });
         await onUpdate(snapshot(state));
       }
       calibrated = true;

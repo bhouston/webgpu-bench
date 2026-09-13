@@ -223,3 +223,36 @@ describe('runSampling', () => {
     expect(bests).toEqual([12, 11, 10, 10, 10]);
   });
 });
+
+it('reports wall-time telemetry without charging calibration or idle to samples', async () => {
+  let time = 0;
+  const events: SuiteProgressEvent[] = [];
+  await runSampling(
+    ['a', 'b'].map((id) => ({
+      id,
+      calibrate: async () => {
+        time += 900;
+      },
+      sample: async () => {
+        time += 25;
+        return 10;
+      },
+    })),
+    {
+      minRounds: 1,
+      maxRounds: 1,
+      idleMs: 100,
+      now: () => time,
+      sleep: async (ms) => {
+        time += ms;
+      },
+      onProgress: (e) => events.push(e),
+    },
+  );
+  expect(time).toBe(1950);
+  expect(events.filter((e) => e.type === 'sample')).toEqual([
+    expect.objectContaining({ durationMs: 25, done: true, timesMs: [10] }),
+    expect.objectContaining({ durationMs: 25, done: true, timesMs: [10] }),
+  ]);
+  expect(events[0]).toMatchObject({ type: 'round', sampling: { minRounds: 1, maxRounds: 1, idleMs: 100 } });
+});

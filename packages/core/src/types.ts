@@ -1,3 +1,4 @@
+import type { SamplingConfig } from './sampling.ts';
 import type { BenchmarkDefinition } from './benchmarks/common.ts';
 
 /** Summary statistics computed over the kept (non-throttled) timed measurements. */
@@ -92,17 +93,22 @@ export type SuiteProgressEvent =
       type: 'round';
       round: number;
       active: number;
-      /**
-       * Estimated measurements still needed across every active benchmark:
-       * each still-active benchmark contributes `max(minRounds + stableRounds
-       * - <its kept measurements so far>, 1)`. Recomputed fresh every round
-       * from each benchmark's own progress (not a fixed total), so it shrinks
-       * as benchmarks converge and never has to be corrected upward the way a
-       * naive "total rounds" guess does — a UI can turn it into an ETA via
-       * `elapsedMs / (unitsCompleted so far)`.
-       */
+      /** Legacy unit estimate; prefer SuiteProgress's confidence-gated display getters. */
       estimatedRemainingUnits: number;
+      /** Ordered work and effective settings, provided by current schedulers. */
+      activeIds?: string[];
+      sampling?: Required<SamplingConfig>;
     }
+  | {
+      type: 'sample';
+      id: string;
+      /** End-to-end sample duration, excluding calibration and intentional idle gaps. */
+      durationMs: number;
+      timesMs: number[];
+      throttledMs: number[];
+      done: boolean;
+    }
+  | { type: 'pause' }
   | { type: 'cooldown'; attempt: number; maxAttempts: number; ms: number; throttledIds: string[] }
   | { type: 'throttle-abort'; throttledIds: string[] };
 
