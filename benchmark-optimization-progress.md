@@ -44,8 +44,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | 8    | Share immutable buffers (#7)              | Trial rejected         | Lazy fixture saves setup but not consistent end-to-end time; GPU sharing deferred. |
 | 9    | Statistical stopping (#9)                 | Deferred               | Keep current best-of-N stopping; no validated replacement estimator.               |
 | 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                     |
-
-| 11 | Test-only idle gaps (follow-up to #2) | Retained | 206 browser tests pass twice; total test time falls from 138.7 s to 71.6–75.7 s. |
+| 11   | Test-only idle gaps (follow-up to #2)     | Retained               | 206 browser tests pass twice; total test time falls from 138.7 s to 71.6–75.7 s.   |
 
 ## Results
 
@@ -253,3 +252,4 @@ of an OS/driver-level desktop stall. Reports: `smoke-idle-tests-1.json`,
 | Calibration cache review                     | `873a314` |
 | Fixture allocation trial                     | `870180f` |
 | Statistical stopping and concurrency reviews | `fd65803` |
+| Test-only idle gap improvement               | `487c0fe` |
