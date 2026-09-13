@@ -13,3 +13,4 @@ packages/webgpu-bench/.vitest-attachments/
 packages/webgpu-bench/src/__screenshots__/
 publish
 packages/core/.vitest/
+microbenchmark-suggestions.md
