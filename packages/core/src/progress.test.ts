@@ -27,7 +27,7 @@ describe('SuiteProgress', () => {
       round: 1,
       active: 2,
       activeIds: ['a', 'b'],
-      sampling: DEFAULT_SAMPLING,
+      sampling: { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6 },
       estimatedRemainingUnits: 10,
     });
     time = 1000;
@@ -37,11 +37,26 @@ describe('SuiteProgress', () => {
     p.onProgress(sample('b', 100));
     p.onResult(row);
     expect(p.completedUnits).toBe(2);
-    // Calibration contributes to elapsed time, never to the cost of future samples.
-    expect(p.remainingSeconds).toBeGreaterThan(0.6);
-    expect(p.remainingSeconds).toBeLessThan(0.7);
-    expect(p.displayFraction).toBeGreaterThan(0.74);
-    expect(p.displayFraction).toBeLessThan(0.77);
+    expect(p.displayFraction).toBeNull(); // need repeated timing evidence
+    p.onProgress({
+      type: 'round',
+      round: 2,
+      active: 2,
+      activeIds: ['a', 'b'],
+      sampling: { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6 },
+      estimatedRemainingUnits: 10,
+    });
+    time = 2100;
+    p.onProgress(sample('a', 100, 2));
+    time = 2300;
+    p.onProgress(sample('b', 100, 2));
+    // Calibration contributes to elapsed time, never to future sample cost.
+    expect(p.remainingSeconds).toBeCloseTo(1.2);
+    expect(p.displayFraction).toBeCloseTo(2.3 / 3.5);
+    // A numeric percentage and ETA can be withdrawn after they have been shown.
+    p.onProgress({ type: 'cooldown', attempt: 1, maxAttempts: 3, ms: 3000, throttledIds: ['a', 'b'] });
+    expect(p.displayFraction).toBeNull();
+    expect(p.remainingSeconds).toBeNull();
     p.finish();
     expect(p.fraction).toBe(1);
     expect(p.displayFraction).toBe(1);
@@ -62,4 +77,94 @@ describe('SuiteProgress', () => {
     expect(p.displayFraction).toBeNull();
     expect(p.remainingSeconds).toBeNull();
   });
+});
+
+function fixedRun() {
+  let time = 0;
+  const p = new SuiteProgress(1, () => time);
+  const round = (n: number) =>
+    p.onProgress({
+      type: 'round',
+      round: n,
+      active: 1,
+      activeIds: ['a'],
+      estimatedRemainingUnits: 7 - n,
+      sampling: { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6, idleMs: 0 },
+    });
+  round(1);
+  time = 1000;
+  p.onProgress(sample('a', 100));
+  round(2);
+  time = 1100;
+  p.onProgress(sample('a', 100, 2));
+  return {
+    p,
+    round,
+    setTime: (t: number) => {
+      time = t;
+    },
+  };
+}
+
+test('expires a previously visible estimate while a dispatch is stalled', () => {
+  const { p, round, setTime } = fixedRun();
+  expect(p.displayFraction).not.toBeNull();
+  expect(p.remainingSeconds).toBeCloseTo(0.4);
+  round(3);
+  setTime(1400);
+  expect(p.displayFraction).toBeNull();
+  expect(p.remainingSeconds).toBeNull();
+});
+
+test.each(['pause', 'throttle-abort'] as const)('withdraws estimates on %s', (type) => {
+  const { p } = fixedRun();
+  expect(p.displayFraction).not.toBeNull();
+  p.onProgress(type === 'pause' ? { type } : { type, throttledIds: ['a'] });
+  expect(p.displayFraction).toBeNull();
+  expect(p.remainingSeconds).toBeNull();
+});
+
+test('withdraws on a discarded sample and can recover with subsequent evidence', () => {
+  const { p, round, setTime } = fixedRun();
+  round(3);
+  setTime(1200);
+  p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10], throttledMs: [15], done: false });
+  expect(p.displayFraction).toBeNull();
+  round(4);
+  setTime(1300);
+  p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10, 10], throttledMs: [15], done: false });
+  expect(p.displayFraction).toBeNull();
+  round(5);
+  setTime(1400);
+  p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10, 10, 10], throttledMs: [15], done: false });
+  expect(p.displayFraction).not.toBeNull();
+});
+
+test.each([0, Number.NaN, Infinity, 300])('rejects missing or surprising duration %s', (duration) => {
+  const { p, round, setTime } = fixedRun();
+  round(3);
+  setTime(1400);
+  p.onProgress(sample('a', duration, 3));
+  expect(p.displayFraction).toBeNull();
+  expect(p.remainingSeconds).toBeNull();
+});
+
+test('can show a useful late percentage while withholding an uncertain ETA', () => {
+  let time = 0;
+  const p = new SuiteProgress(1, () => time);
+  for (let n = 1; n <= 2; n++) {
+    p.onProgress({
+      type: 'round',
+      round: n,
+      active: 1,
+      activeIds: ['a'],
+      sampling: DEFAULT_SAMPLING,
+      estimatedRemainingUnits: 6 - n,
+    });
+    time += 1000;
+    p.onProgress(sample('a', 100, n));
+  }
+  expect(p.displayFraction).toBeGreaterThan(0.9);
+  expect(p.remainingSeconds).toBeNull();
+  expect(p.displayFraction).toBeLessThan(1);
 });

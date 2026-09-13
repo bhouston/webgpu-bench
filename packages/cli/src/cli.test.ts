@@ -55,6 +55,8 @@ test('runs a filtered benchmark as a table', async () => {
   expect(result).toHaveStdout(/^Vendor\s+\S/m);
   expect(result).toHaveStdout(/^f32-div\s+[\d.]+ [kMGT]?FLOP\/s$/m);
   expect(result).toHaveStderr(/Running 1 benchmark…/);
+  expect(result).toHaveStderr(/Estimating runtime…/);
+  expect(result).toHaveStderr(/100%/);
 });
 
 test('--json prints device info and results, and --report posts them', async () => {

@@ -15,6 +15,8 @@ export class SuiteProgress {
   private roundSampled = false;
   private cfg = DEFAULT_SAMPLING;
   private calibrated = false;
+  private round = 0;
+  private blockedUntilRound = 0;
 
   constructor(
     benchmarkCount: number,
@@ -25,7 +27,11 @@ export class SuiteProgress {
   }
 
   onProgress = (event: SuiteProgressEvent): void => {
+    if (event.type === 'cooldown' || event.type === 'pause' || event.type === 'throttle-abort') {
+      this.blockedUntilRound = this.round + 2;
+    }
     if (event.type === 'round') {
+      this.round = event.round;
       this.remainingUnits = event.estimatedRemainingUnits;
       this.activeIds = event.activeIds ?? [];
       this.pending = new Set(this.activeIds);
@@ -38,6 +44,15 @@ export class SuiteProgress {
       this.roundSampled = true;
       const previous = this.samples.get(event.id);
       const durations = previous?.durations ?? [];
+      const lastDuration = durations.at(-1);
+      if (
+        event.throttledMs.length > (previous?.throttledMs.length ?? 0) ||
+        !(event.durationMs > 0) ||
+        !Number.isFinite(event.durationMs) ||
+        (lastDuration !== undefined && Math.abs(event.durationMs / lastDuration - 1) > 0.2)
+      ) {
+        this.blockedUntilRound = this.round + 2;
+      }
       if (event.durationMs > 0 && Number.isFinite(event.durationMs)) durations.push(event.durationMs);
       this.samples.set(event.id, {
         durations,
@@ -76,6 +91,7 @@ export class SuiteProgress {
   private predictSamples(times: readonly number[]): number {
     const minimum = this.minimumSamples(times);
     const cap = Math.max(1, this.cfg.maxRounds - times.length);
+    if (minimum >= cap) return cap;
     let improvements = 0,
       best = times[0] ?? Infinity;
     for (const value of times.slice(1)) {
@@ -106,20 +122,38 @@ export class SuiteProgress {
     return Math.max(minimum, expected);
   }
 
-  private get remainingMs(): number | null {
-    if (!this.calibrated || this.finished) return null;
+  private estimateMs(mode: 'expected' | 'lower' | 'upper'): number | null {
+    if (!this.calibrated || this.finished || this.round < this.blockedUntilRound) return null;
+    const nextId = this.pending.values().next().value;
+    const nextDuration = nextId ? this.samples.get(nextId)?.durations.at(-1) : undefined;
+    if (this.now() - this.updatedAt > Math.max(250, ((nextDuration ?? 0) + this.cfg.idleMs) * 1.5)) return null;
     let estimate = 0,
       futureSamples = 0,
       futureRounds = 0,
       currentSamples = 0;
-    this.remainingUnits = 0;
+    if (mode === 'expected') this.remainingUnits = 0;
     for (const [id, state] of this.samples) {
       if (state.done) continue;
-      if (state.durations.length === 0) return null;
-      const count = this.predictSamples(state.timesMs);
-      this.remainingUnits += count;
+      if (state.durations.length < 2) return null;
+      const cap = Math.max(1, this.cfg.maxRounds - state.timesMs.length);
+      const expected = this.predictSamples(state.timesMs);
+      // Empirical envelope: allow another full stability window of improvements.
+      // It is intentionally not a confidence interval or a guarantee of future GPU behavior.
+      const count =
+        mode === 'lower'
+          ? this.minimumSamples(state.timesMs)
+          : mode === 'upper'
+            ? Math.min(cap, expected + this.cfg.stableRounds)
+            : expected;
+      if (mode === 'expected') this.remainingUnits += count;
       const mean = state.durations.reduce((a, b) => a + b, 0) / state.durations.length;
-      estimate += mean * count;
+      const duration =
+        mode === 'lower'
+          ? Math.min(...state.durations.slice(-3)) * 0.9
+          : mode === 'upper'
+            ? Math.max(...state.durations.slice(-3)) * 1.1
+            : mean;
+      estimate += duration * count;
       const current = this.pending.has(id) ? 1 : 0;
       currentSamples += current;
       futureSamples += count - current;
@@ -130,7 +164,7 @@ export class SuiteProgress {
     return Math.max(0, estimate - (this.now() - this.updatedAt));
   }
 
-  /** Numeric compatibility accessor. Use displayFraction to render a trustworthy percentage. */
+  /** @deprecated Use displayFraction; numeric compatibility returns 0 while indeterminate. */
   get fraction(): number {
     return this.displayFraction ?? 0;
   }
@@ -138,15 +172,22 @@ export class SuiteProgress {
   /** Null means show an indeterminate status, not a percentage or a filled bar. */
   get displayFraction(): number | null {
     if (this.finished) return 1;
-    const remaining = this.remainingMs;
+    const remaining = this.estimateMs('expected');
     if (remaining === null) return null;
     const elapsed = this.now() - this.startTime;
+    const lower = this.estimateMs('lower')!;
+    const upper = this.estimateMs('upper')!;
+    if (Math.max(remaining - lower, upper - remaining) / (elapsed + remaining) > 0.2) return null;
     return Math.min(0.999, elapsed / Math.max(1, elapsed + remaining));
   }
 
-  /** Projected seconds left; null when there is insufficient timing evidence. */
+  /** Unrounded seconds left; separately gated because an accurate percentage need not imply an accurate ETA. */
   get remainingSeconds(): number | null {
-    const remaining = this.remainingMs;
-    return remaining === null ? null : remaining / 1000;
+    const remaining = this.estimateMs('expected');
+    if (remaining === null) return null;
+    const lower = this.estimateMs('lower')!;
+    const upper = this.estimateMs('upper')!;
+    if (lower <= 0 || Math.max(remaining / lower - 1, 1 - remaining / upper) > 0.2) return null;
+    return remaining / 1000;
   }
 }

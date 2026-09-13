@@ -14,6 +14,8 @@ const { values } = parseArgs({
     output: { type: 'string' },
     traces: { type: 'string' },
     repeats: { type: 'string', default: '3' },
+    seed: { type: 'string', default: '1' },
+    groups: { type: 'string', default: 'representative,single,fixed' },
   },
 });
 
@@ -72,7 +74,7 @@ async function synthetic() {
       'late-improvement',
     ]) {
       for (let seed = 1; seed <= 12; seed++) {
-        const rng = random(seed * 71);
+        const rng = random((seed + Number(values.seed) - 1) * 71);
         Math.random = rng;
         let time = 0;
         const events = [];
@@ -167,19 +169,19 @@ async function captureBrowser(name) {
         : { headless: false, args: ['--headless=new', '--enable-unsafe-webgpu', '--ignore-gpu-blocklist'] },
     );
     for (let repeat = 0; repeat < Number(values.repeats); repeat++) {
-      for (const group of ['representative', 'single', 'fixed']) {
+      for (const group of values.groups.split(',')) {
         const page = await browser.newPage();
         await page.goto(`http://127.0.0.1:${server.address().port}/`);
         const trace = await page.evaluate(
-          async ({ group, repeat }) => {
+          async ({ group: workload, runSeed }) => {
             const { runSuite, BENCHMARKS } = await import('/suite.js');
-            let seed = 4321 + repeat;
+            let seed = runSeed;
             Math.random = () => {
               seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
               return seed / 2 ** 32;
             };
             const ids =
-              group === 'single'
+              workload === 'single'
                 ? ['f32-div']
                 : [
                     'read-linear',
@@ -194,12 +196,12 @@ async function captureBrowser(name) {
                     'atomic-direct',
                     'read-dependent-chain',
                   ];
-            const benchmarks = BENCHMARKS.filter((b) => ids.includes(b.id));
+            const benchmarks = workload === 'all' ? BENCHMARKS : BENCHMARKS.filter((b) => ids.includes(b.id));
             const events = [];
             const start = performance.now();
             for await (const row of runSuite({
               benchmarks,
-              ...(group === 'fixed' ? { minRounds: 6, maxRounds: 6 } : {}),
+              ...(workload === 'fixed' ? { minRounds: 6, maxRounds: 6 } : {}),
               onProgress: (e) => events.push({ at: performance.now() - start, kind: 'progress', value: e }),
             })) {
               if (row.status === 'error') throw new Error(`${row.id}: ${row.message}`);
@@ -211,7 +213,7 @@ async function captureBrowser(name) {
             }
             return { count: benchmarks.length, totalMs: performance.now() - start, events };
           },
-          { group, repeat },
+          { group, runSeed: 4320 + Number(values.seed) + repeat },
         );
         traces.push({ name: `${name}-${group}-${repeat}`, group: `${name}-${group}`, ...trace });
         console.error(`${traces.at(-1).name}: ${(trace.totalMs / 1000).toFixed(2)}s`);
@@ -225,6 +227,19 @@ async function captureBrowser(name) {
   }
   return traces;
 }
+
+const format = (g) =>
+  Object.fromEntries(
+    ['fraction', 'eta'].map((k) => [
+      k,
+      {
+        coverage: +((100 * g[`${k}Visible`]) / g.runtime).toFixed(2),
+        within20: g[`${k}Visible`] ? +((100 * g[`${k}Good`]) / g[`${k}Visible`]).toFixed(2) : null,
+        meanRelativeError: g[`${k}Visible`] ? +((100 * g[`${k}Error`]) / g[`${k}Visible`]).toFixed(2) : null,
+        accurateCoverage: +((100 * g[`${k}Good`]) / g.runtime).toFixed(2),
+      },
+    ]),
+  );
 
 function evaluate(traces, factory, gated) {
   const groups = {};
@@ -270,18 +285,6 @@ function evaluate(traces, factory, gated) {
     for (const [k, v] of Object.entries(g)) a[k] = (a[k] ?? 0) + v;
     return a;
   }, {});
-  const format = (g) =>
-    Object.fromEntries(
-      ['fraction', 'eta'].map((k) => [
-        k,
-        {
-          coverage: +((100 * g[`${k}Visible`]) / g.runtime).toFixed(2),
-          within20: g[`${k}Visible`] ? +((100 * g[`${k}Good`]) / g[`${k}Visible`]).toFixed(2) : null,
-          meanRelativeError: g[`${k}Visible`] ? +((100 * g[`${k}Error`]) / g[`${k}Visible`]).toFixed(2) : null,
-          accurateCoverage: +((100 * g[`${k}Good`]) / g.runtime).toFixed(2),
-        },
-      ]),
-    );
   return { total: format(total), groups: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, format(g)])) };
 }
 

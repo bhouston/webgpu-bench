@@ -105,3 +105,54 @@ Synthetic mean percentage error increased from 20.64% to 23.12% despite better
 within-20% accuracy: cooldowns and late surprises still make some estimates very
 wrong. This motivates the next trial's revocable confidence gate rather than
 claiming the point prediction alone solves reliability.
+
+### Trial 5: reject the full retry-cap envelope as the display policy
+
+Bound sample work between earliest convergence and the remaining kept/discarded
+attempt budget, with a ±20% duration allowance. Percentage accuracy reached 100%,
+but coverage was only **0.77% synthetic, 1.68% Chromium, 2.02% WebKit**. ETA
+coverage was zero. This does not include arbitrary future pauses (which have no
+finite bound). It is still too pessimistic to be useful; the gate framework is
+retained, but this work envelope is replaced in trial 6.
+
+### Trial 6: retain empirical, revocable confidence gates
+
+Require at least two timing observations for every active benchmark. Bound work
+between earliest convergence and the predicted work plus a full stability window,
+capped by the effective kept-sample limit. Use recent observed duration extrema
+with a 10% allowance. Require the entire resulting percentage range to fit within
+20% relative error around the point prediction. ETA uses its own relative-error
+check against the remaining-time bounds, rather than the total-time bounds.
+
+This is an **empirical envelope**, not a formal 95% confidence interval. Compare
+new sample durations with their previous forecasts; a >20% change, invalid timing,
+discard, cooldown or hidden-page event withdraws estimates until two later round
+numbers. A timer-based freshness check also withdraws a stalled estimate without
+waiting for another sample. The policy can recover, and does not force monotonic
+percentages that would conceal a revised prediction. Completed setup/calibration
+remains credited in elapsed time. No sampling parameters or workloads change.
+
+| Dataset             | Percentage accuracy / coverage | ETA accuracy / coverage |
+| ------------------- | -----------------------------: | ----------------------: |
+| Synthetic, 144 runs |                  99.88 / 16.50 |              100 / 5.64 |
+| Chromium, 6 runs    |                    100 / 32.04 |             100 / 28.50 |
+| WebKit, 6 runs      |                  99.56 / 34.64 |             100 / 32.59 |
+
+Percentage mean relative error falls to **3.29%, 0.30%, 0.64%**, respectively.
+These are time-weighted metrics for the API getters, not independent statistical
+trials: many successive estimates share the same run. The confidence gate trades
+coverage for accuracy deliberately. The full-runtime denominator includes setup
+and calibration; ordinary short/default suites have less coverage than fixed-six-
+round suites. Per-family results and independent follow-up appear below.
+
+The CLI now uses nullable `displayFraction`, prints `Estimating runtime…` while
+uncertain, refreshes during event-free waits, and clears the timer on success or
+failure. It shows an ETA only when separately eligible, to one decimal place.
+It reports 100% only after the generator finishes. The core README documents API
+migration and periodic polling for browser consumers outside this repository.
+
+Validation so far: **48 core Node tests, 8 CLI tests, TypeScript build pass**.
+Tests cover setup, calibration, effective settings, empty/legacy streams, separate
+ETA eligibility, expiry, pause/abort, discards, recovery and invalid/changed timing.
+Machine: Apple M3, macOS 27.0 (26A428). Fresh GPU validation follows without tuning
+these thresholds against its outcomes.

@@ -50,6 +50,33 @@ for await (const result of runSuite({
 `index.ts` also exports `GpuContext`/`acquireGpuContext`, `createPipeline`, `prepareKernelBenchmark`, the
 shared metric defs, and `generateMatVecData` for writing your own `prepare()`.
 
+## Displaying progress
+
+```ts
+const progress = new SuiteProgress(benchmarks.length);
+for await (const result of runSuite({ benchmarks, onProgress: progress.onProgress })) {
+  progress.onResult(result);
+  // null means an indeterminate bar/status, with no numeric percentage.
+  renderProgress(progress.displayFraction, progress.remainingSeconds);
+}
+progress.finish();
+renderProgress(progress.displayFraction, progress.remainingSeconds);
+```
+
+Import `SuiteProgress` from `webgpu-bench-core`. Poll the getters periodically as
+well as after events: a long dispatch can make an earlier estimate unreliable.
+Percentage and ETA are independently gated to an empirical roughly-20% error
+envelope, after calibration and repeated timing observations. Cooldowns, hidden
+pages, discarded samples and timing changes can withdraw an estimate. This is
+an estimate of wall-time completion, not a count of completed benchmarks, and it
+can move backward when remaining work changes. Only `finish()` returns 100%.
+`remainingSeconds` is unrounded; format it to suitable precision. The legacy
+numeric `fraction` getter returns zero while indeterminate and is deprecated for
+display; migrate to `displayFraction` to avoid showing a misleading `0%`.
+Older schedulers without duration telemetry stay indeterminate until `finish()`.
+See [the experiment report](../../progress-estimation-study.md) for accuracy,
+coverage, and limitations of the empirical gate.
+
 ## What's measured
 
 The raw throughput probes emphasize memory reads, writes, or ALU work. The technique comparisons below

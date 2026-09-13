@@ -101,7 +101,10 @@ export const command = defineCommand({
     const progress = new SuiteProgress(benchmarks.length);
     const results = new Map<string, BenchmarkResult>();
     let info: DeviceInfo | undefined;
-    let lastPercent = -1;
+    let lastLine = '';
+    let lastBucket: number | null = null;
+    let lastVisible = false;
+    let renderEnabled = false;
     const tty = process.stderr.isTTY;
     const bar = (fraction: number) => {
       const filled = Math.round(fraction * BAR_WIDTH);
@@ -112,20 +115,43 @@ export const command = defineCommand({
       if (!argv.json) console.log(`${formatDeviceInfo(i)}\n`);
       console.error(`Running ${benchmarks.length} benchmark${benchmarks.length === 1 ? '' : 's'}…`);
     };
-    for await (const r of runSuite({ benchmarks, onDeviceInfo, onProgress: progress.onProgress })) {
-      results.set(r.id, r);
-      progress.onResult(r);
-      const percent = Math.floor(progress.fraction * 100);
-      // A TTY redraws one line; a log gets a line every 10%.
-      if (percent !== lastPercent && (tty || percent % 10 === 0)) {
-        lastPercent = percent;
-        const eta = progress.remainingSeconds;
-        const line = `${bar(progress.fraction)} ${String(percent).padStart(3)}%${eta ? ` (${eta}s remaining)` : ''}`;
+    const renderProgress = () => {
+      if (!renderEnabled) return;
+      const fraction = progress.displayFraction;
+      const visible = fraction !== null;
+      const percent = fraction === null ? null : Math.floor(fraction * 100);
+      const bucket = percent === null ? null : Math.floor(percent / 10);
+      const eta = progress.remainingSeconds;
+      // Decimal seconds avoid large rounding errors for short remaining durations.
+      const line =
+        fraction === null
+          ? 'Estimating runtime…'
+          : `${bar(fraction)} ${String(percent).padStart(3)}%${eta !== null ? ` (${eta.toFixed(1)}s remaining)` : ''}`;
+      if (line !== lastLine && (tty || !lastLine || visible !== lastVisible || bucket !== lastBucket)) {
         process.stderr.write(tty ? `\r${line}\x1b[K` : `${line}\n`);
+        lastLine = line;
+        lastBucket = bucket;
+        lastVisible = visible;
       }
+    };
+    const onProgress: typeof progress.onProgress = (event) => {
+      progress.onProgress(event);
+      renderProgress(); // Immediately clear a stale estimate on cooldown/pause.
+    };
+    // Recheck confidence during long dispatches or pauses, even without new rows.
+    const timer = setInterval(renderProgress, 100);
+    try {
+      for await (const r of runSuite({ benchmarks, onDeviceInfo, onProgress })) {
+        results.set(r.id, r);
+        progress.onResult(r);
+        renderEnabled = true;
+        renderProgress();
+      }
+      progress.finish();
+      process.stderr.write(tty ? `\r${bar(1)} 100%\x1b[K\n\n` : '100%\n\n');
+    } finally {
+      clearInterval(timer);
     }
-    progress.finish();
-    process.stderr.write(tty ? `\r${bar(1)} 100%\x1b[K\n\n` : '\n');
 
     const rows = [...results.values()].toSorted((a, b) => a.id.localeCompare(b.id));
     if (argv.json) {
