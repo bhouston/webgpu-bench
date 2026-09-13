@@ -32,8 +32,8 @@ node scripts/profile-suite.mjs --browser webkit \
 
 | Step | Idea from brainstorm                      | Status             | Evidence / decision                                                              |
 | ---- | ----------------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
-| 0    | Runtime breakdown and baseline            | Running            | Establish correctness, runtime and score comparison procedure.                   |
-| 1    | Shorter precision-aware measurements (#1) | Pending            | Compare 20 ms with 100 ms before designing adaptation.                           |
+| 0    | Runtime breakdown and baseline            | Complete           | 206 browser tests pass; profiling harness added.                                 |
+| 1    | Shorter precision-aware measurements (#1) | Rejected for now   | 20 ms increased cooldowns, runtime and score instability in both browsers.       |
 | 2    | Work-proportional idle gaps (#2)          | Pending            | Measure score and throttling effects before changing rest.                       |
 | 3    | Share empty-submit overhead probes (#4)   | Pending            | Preserve per-sample timestamp cross-checks.                                      |
 | 4    | Async pipeline preparation (#6)           | Pending            | Preserve error reporting and isolate compilation from measurement.               |
@@ -61,3 +61,21 @@ production-size measurement equivalence.
 The profiling harness measures setup, calibration, sampling and total duration
 without adding per-probe logging or changing the GPU timer. Production-size score
 experiments are separate from the correctness tests above.
+
+### Step 1 — shorter measurements: rejected
+
+ABBA comparison, 11 production-size workloads, two runs per setting/browser,
+100 ms reference versus 20 ms candidate; other settings identical.
+
+| Browser  | Reference median | Candidate median | Cooldowns per reference / candidate run |
+| -------- | ---------------: | ---------------: | --------------------------------------- |
+| WebKit   |          8.030 s |         15.557 s | 0 / 3                                   |
+| Chromium |          9.065 s |         15.980 s | 0 / 3                                   |
+
+The shorter runs spent less time doing GPU work but their noisier measurements
+triggered cooldowns. In WebKit, 10 of 11 median scores shifted by more than 5%,
+and some candidate runs differed in their eventual timing method. A cooldown is
+a scheduler classification, not direct evidence of actual thermal throttling.
+No default or test workload was changed. Adaptive shortening needs a reliable
+precision/timer-method eligibility gate first; a blanket 20 ms default is rejected.
+Raw reports: `short-webkit.json`, `short-chromium.json` in the temporary results directory.
