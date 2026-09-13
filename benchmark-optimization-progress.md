@@ -37,7 +37,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | 2    | Work-proportional idle gaps (#2)          | Deferred               | 50 ms improved runtime but failed the WebKit score screen.                       |
 | 3    | Share empty-submit overhead probes (#4)   | Rejected               | Runtime benefit was marginal; one WebKit score shifted beyond the screen.        |
 | 4    | Async pipeline preparation (#6)           | Retained for stability | Fully compiled pipelines before calibration; no demonstrated warm-run speedup.   |
-| 5    | Reuse calibration/warmup work (#3)        | Pending                | Avoid selecting headline samples based on favorable calibration timings.         |
+| 5    | Reuse calibration/warmup work (#3)        | Deferred               | Removing warmup saves 11–17%, but WebKit score equivalence remains inconclusive. |
 | 6    | Encode during idle (#8)                   | Pending                | Evaluate remaining CPU encoding cost and resource hazards.                       |
 | 7    | Cache calibration hints (#5)              | Pending                | First-run versus repeat-run benefit must be explicit.                            |
 | 8    | Share immutable buffers (#7)              | Pending                | Check remaining setup cost and cache effects.                                    |
@@ -132,3 +132,15 @@ compilation completion and error handling, not credited as a runtime win.
 Bounded parallel preparation is deferred: measured warm setup is roughly 1% of
 total runtime, and custom benchmark preparation can depend on serial execution.
 Reports: `async-*.json`, `async-tests.json`, `unchanged-chromium.json`.
+
+### Step 5 — reuse warmup work: promising, deferred
+
+Using `warmups: 0` after the existing calibration reduced WebKit median runtime
+from 8.909 to 7.387 s (-17.1%) and Chromium from 8.570 to 7.586 s (-11.5%).
+No cooldowns occurred; Chromium score shifts stayed within 3.16%. WebKit layout-soa
+shifted -6.20%, with substantial reference variation, and workgroup-64 shifted
+-4.47%. This does not establish a regression, but also does not establish equivalence.
+The default remains one discarded warmup. A future conditional policy could credit
+only a final calibration probe at the actual final batch size as warmup, with an
+explicit warmup override honored. Calibration timings must never become selected
+headline samples. Reports: `warmup-webkit.json`, `warmup-chromium.json`.
