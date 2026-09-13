@@ -30,19 +30,19 @@ node scripts/profile-suite.mjs --browser webkit \
 
 ## Sequence and decisions
 
-| Step | Idea from brainstorm                      | Status             | Evidence / decision                                                              |
-| ---- | ----------------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
-| 0    | Runtime breakdown and baseline            | Complete           | 206 browser tests pass; profiling harness added.                                 |
-| 1    | Shorter precision-aware measurements (#1) | Rejected for now   | 20 ms increased cooldowns, runtime and score instability in both browsers.       |
-| 2    | Work-proportional idle gaps (#2)          | Deferred           | 50 ms improved runtime but failed the WebKit score screen.                       |
-| 3    | Share empty-submit overhead probes (#4)   | Rejected           | Runtime benefit was marginal; one WebKit score shifted beyond the screen.        |
-| 4    | Async pipeline preparation (#6)           | Pending            | Preserve error reporting and isolate compilation from measurement.               |
-| 5    | Reuse calibration/warmup work (#3)        | Pending            | Avoid selecting headline samples based on favorable calibration timings.         |
-| 6    | Encode during idle (#8)                   | Pending            | Evaluate remaining CPU encoding cost and resource hazards.                       |
-| 7    | Cache calibration hints (#5)              | Pending            | First-run versus repeat-run benefit must be explicit.                            |
-| 8    | Share immutable buffers (#7)              | Pending            | Check remaining setup cost and cache effects.                                    |
-| 9    | Statistical stopping (#9)                 | Pending            | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum. |
-| 10   | Concurrent kernels (#10)                  | Rejected by design | Would measure contention rather than isolated kernel ceilings.                   |
+| Step | Idea from brainstorm                      | Status                 | Evidence / decision                                                              |
+| ---- | ----------------------------------------- | ---------------------- | -------------------------------------------------------------------------------- |
+| 0    | Runtime breakdown and baseline            | Complete               | 206 browser tests pass; profiling harness added.                                 |
+| 1    | Shorter precision-aware measurements (#1) | Rejected for now       | 20 ms increased cooldowns, runtime and score instability in both browsers.       |
+| 2    | Work-proportional idle gaps (#2)          | Deferred               | 50 ms improved runtime but failed the WebKit score screen.                       |
+| 3    | Share empty-submit overhead probes (#4)   | Rejected               | Runtime benefit was marginal; one WebKit score shifted beyond the screen.        |
+| 4    | Async pipeline preparation (#6)           | Retained for stability | Fully compiled pipelines before calibration; no demonstrated warm-run speedup.   |
+| 5    | Reuse calibration/warmup work (#3)        | Pending                | Avoid selecting headline samples based on favorable calibration timings.         |
+| 6    | Encode during idle (#8)                   | Pending                | Evaluate remaining CPU encoding cost and resource hazards.                       |
+| 7    | Cache calibration hints (#5)              | Pending                | First-run versus repeat-run benefit must be explicit.                            |
+| 8    | Share immutable buffers (#7)              | Pending                | Check remaining setup cost and cache effects.                                    |
+| 9    | Statistical stopping (#9)                 | Pending                | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum. |
+| 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                   |
 
 ## Results
 
@@ -106,3 +106,29 @@ layout-soa score shifted -9.77%, while the other ten median shifts were within 1
 This does not prove the cache caused that outlier, but it fails the acceptance
 screen and does not justify extra timer-state complexity. Reverted the trial
 implementation and its cache-specific test. Reports: `overhead-*.json`.
+
+### Step 4 — asynchronous pipeline creation: retained, not counted as a speedup
+
+Pipeline creation now awaits `createComputePipelineAsync`; shader-module and async
+pipeline validation failures retain the benchmark label. Error scopes are popped
+before awaiting, avoiding accidental nesting across asynchronous preparations.
+This ensures calibration begins with a compiled pipeline. No concurrent GPU work
+or parallel benchmark preparation was introduced.
+
+All 206 browser tests and 36 unit tests passed; type checking and lint passed
+(with the same two existing CLI lint warnings). Browser spans: Chromium 74.92 s,
+WebKit 67.89 s. Catalog smoke: 58.12 / 51.28 s; responsiveness: 15.41 / 15.46 s.
+These single test runs are slower than baseline; there is **no demonstrated
+end-to-end speedup** from this change.
+
+Warm ABBA production-size profiles were effectively unchanged: WebKit 8.469 to
+8.438 s; Chromium 8.753 to 8.732 s. WebKit score shifts were within 4.24%; Chromium
+was within 1% except layout-soa (-5.95%). An unchanged-code three-pair control
+showed layout-soa run-to-run variation up to 8.17%, and a 4.42% apparent runtime
+difference despite identical code. The layout result therefore remains noisy;
+this is not proof of tight cross-device score equivalence. Retained for explicit
+compilation completion and error handling, not credited as a runtime win.
+
+Bounded parallel preparation is deferred: measured warm setup is roughly 1% of
+total runtime, and custom benchmark preparation can depend on serial execution.
+Reports: `async-*.json`, `async-tests.json`, `unchanged-chromium.json`.

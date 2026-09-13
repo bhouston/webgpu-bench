@@ -8,20 +8,7 @@ export const FLOPS_METRIC: MetricDef = { key: 'flops', unit: 'FLOP', name: 'Floa
 export const OPS_METRIC: MetricDef = { key: 'ops', unit: 'OP', name: 'Operations' };
 export const BYTES_METRIC: MetricDef = { key: 'bytes', unit: 'B', name: 'Bandwidth' };
 
-/**
- * Compiles a shader module and builds a compute pipeline from it, watching
- * for validation errors via error scopes rather than trusting the WebGPU
- * calls to throw. Both `createShaderModule` and `createComputePipeline`
- * (`'auto'` layout) succeed synchronously even when the WGSL fails to
- * compile or the pipeline is otherwise invalid — the failure only surfaces
- * later as a device-level 'uncapturederror' when something dispatches
- * against it. Left unchecked, that means the compute pass silently does
- * nothing: the command buffer still submits and completes almost
- * instantly, so a GPU-timestamp read of a never-touched, zero-initialized
- * query buffer comes back as exactly 0ns elapsed — reported as a
- * misleadingly "ok" benchmark result with 0s timings, rather than the
- * shader-compile failure it actually is.
- */
+/** Create a fully compiled pipeline before calibration starts. */
 export async function createPipeline(
   device: GPUDevice,
   label: string,
@@ -31,16 +18,20 @@ export async function createPipeline(
 ): Promise<GPUComputePipeline> {
   device.pushErrorScope('validation');
   const module = device.createShaderModule({ label, code });
-  const pipeline = device.createComputePipeline({
-    label,
-    layout: 'auto',
-    compute: { module, entryPoint, constants },
-  });
-  const error = await device.popErrorScope();
-  if (error) {
-    throw new Error(`Failed to create pipeline "${label}": ${error.message}`);
+  // Pop synchronously so another preparation cannot nest inside our scope.
+  // Pipeline validation errors are reported by the async creation promise.
+  const moduleValidation = device.popErrorScope();
+  try {
+    const [error, pipeline] = await Promise.all([
+      moduleValidation,
+      device.createComputePipelineAsync({ label, layout: 'auto', compute: { module, entryPoint, constants } }),
+    ]);
+    if (error) throw error;
+    return pipeline;
+  } catch (error) {
+    const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error);
+    throw new Error(`Failed to create pipeline "${label}": ${message}`, { cause: error });
   }
-  return pipeline;
 }
 
 /** `<metric.unit>/s`, from the amount of that unit moved/computed in one op and that op's best time. */
