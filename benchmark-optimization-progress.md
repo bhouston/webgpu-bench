@@ -38,7 +38,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | 3    | Share empty-submit overhead probes (#4)   | Rejected               | Runtime benefit was marginal; one WebKit score shifted beyond the screen.        |
 | 4    | Async pipeline preparation (#6)           | Retained for stability | Fully compiled pipelines before calibration; no demonstrated warm-run speedup.   |
 | 5    | Reuse calibration/warmup work (#3)        | Deferred               | Removing warmup saves 11–17%, but WebKit score equivalence remains inconclusive. |
-| 6    | Encode during idle (#8)                   | Pending                | Evaluate remaining CPU encoding cost and resource hazards.                       |
+| 6    | Encode during idle (#8)                   | Deferred               | WebKit encoding consumes under 1% of representative suite time.                  |
 | 7    | Cache calibration hints (#5)              | Pending                | First-run versus repeat-run benefit must be explicit.                            |
 | 8    | Share immutable buffers (#7)              | Pending                | Check remaining setup cost and cache effects.                                    |
 | 9    | Statistical stopping (#9)                 | Pending                | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum. |
@@ -144,3 +144,14 @@ The default remains one discarded warmup. A future conditional policy could cred
 only a final calibration probe at the actual final batch size as warmup, with an
 explicit warmup override honored. Calibration timings must never become selected
 headline samples. Reports: `warmup-webkit.json`, `warmup-chromium.json`.
+
+### Step 6 — encode during idle: defer after profiling
+
+Added nested `encodeMs` instrumentation to the opt-in profiler. In two WebKit
+runs of unchanged code, kernel encoding consumed 80 / 79 ms out of 8.788 / 9.048 s
+(0.91% / 0.87%). This measures the kernel encode callback, not all driver work;
+coarse clocks and instrumentation overhead limit precision. Even hiding this
+entire measured cost would save under 1%. Moving commands earlier would also
+require preserving shared timer/query lifetimes, single-use command buffers and
+custom callback ordering. No production scheduling change is justified by this
+profile. Reports: `encode-webkit.json`, `encode-chromium.json`.

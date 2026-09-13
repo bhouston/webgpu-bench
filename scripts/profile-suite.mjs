@@ -73,7 +73,7 @@ try {
             randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
             return randomState / 2 ** 32;
           };
-          const phases = { prepareMs: 0, calibrateMs: 0, sampleMs: 0 };
+          const phases = { prepareMs: 0, calibrateMs: 0, sampleMs: 0, encodeMs: 0 };
           for (const [method, key] of [
             ['calibrate', 'calibrateMs'],
             ['sample', 'sampleMs'],
@@ -96,7 +96,20 @@ try {
             prepare: async (...args) => {
               const start = performance.now();
               try {
-                return await definition.prepare(...args);
+                const prepared = await definition.prepare(...args);
+                if (prepared.kind === 'kernel') {
+                  const encode = prepared.harness.encode;
+                  prepared.harness.encode = function (...encodeArgs) {
+                    const encodeStart = performance.now();
+                    try {
+                      return encode.apply(this, encodeArgs);
+                    } finally {
+                      // Nested within calibration/sampling, not an additive phase.
+                      phases.encodeMs += performance.now() - encodeStart;
+                    }
+                  };
+                }
+                return prepared;
               } finally {
                 phases.prepareMs += performance.now() - start;
               }
