@@ -41,7 +41,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | 6    | Encode during idle (#8)                   | Deferred               | WebKit encoding consumes under 1% of representative suite time.                    |
 | 7    | Cache calibration hints (#5)              | Deferred               | No first-run benefit; stale hints need bounded device-local validation.            |
 | 8    | Share immutable buffers (#7)              | Trial rejected         | Lazy fixture saves setup but not consistent end-to-end time; GPU sharing deferred. |
-| 9    | Statistical stopping (#9)                 | Pending                | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum.   |
+| 9    | Statistical stopping (#9)                 | Deferred               | Keep current best-of-N stopping; no validated replacement estimator.               |
 | 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                     |
 
 ## Results
@@ -188,3 +188,20 @@ Three alternating pairs of a filtered workgroup-64 run: WebKit median 0.328 to
 WebKit candidate also took 0.593 s. The deterministic allocation saving does not
 establish a reliable start-to-finish gain, so the fixture trial and its two new unit tests were reverted.
 Reports: `lazy-webkit.json`, `lazy-chromium.json`.
+
+### Step 9 — statistical stopping: defer a change of estimator
+
+The scheduler already retires a benchmark once the best observed time stabilizes,
+subject to minimum/maximum rounds. A confidence interval for the mean does not
+validate the reported minimum. Fewer observations can change the minimum even
+when a mean estimate looks stable. A new stopping policy needs simulations with
+known minima plus device trials that include warmup, drift and correlated noise;
+this pass has no evidence to justify replacing the current rule. No sample-count
+or convergence default changed. This was a source/design review, not a runtime trial.
+
+### Step 10 — concurrent kernels: reject for isolated ceiling measurements
+
+Concurrent kernels would compete for bandwidth, execution capacity, caches and
+power. Even if total wall time fell, the result would describe contention instead
+of each kernel's isolated ceiling. No concurrent GPU trial was run. Browser tests
+and profiling runs remain sequential, particularly given the earlier freeze.
