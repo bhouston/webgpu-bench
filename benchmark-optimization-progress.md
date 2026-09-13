@@ -8,7 +8,8 @@ Changes are evaluated sequentially and retained improvements are committed separ
 The unrelated `microbenchmark-suggestions.md` is not part of this work.
 
 - Run all browser correctness and responsiveness tests in Chromium and WebKit, sequentially.
-- Record suite-test and whole-browser wall time; do not shorten tests just to improve the number.
+- Record suite-test and whole-browser wall time; preserve workloads, assertions and sampling coverage.
+  Evaluate any test-only idle change separately from production measurement policies.
 - Use `scripts/profile-suite.mjs` for matched reference/candidate runs of 11 representative
   workloads at production compute sizes. Alternate order (ABBA), use identical shuffle seeds
   within each pair, and record scores, discarded samples, timing methods, phase costs, and timer gaps.
@@ -44,12 +45,13 @@ node scripts/profile-suite.mjs --browser webkit \
 | 9    | Statistical stopping (#9)                 | Deferred               | Keep current best-of-N stopping; no validated replacement estimator.               |
 | 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                     |
 
+| 11 | Test-only idle gaps (follow-up to #2) | Retained | 206 browser tests pass twice; total test time falls from 138.7 s to 71.6–75.7 s. |
+
 ## Results
 
 ### Baseline: `c9a2ddb`
 
-All 206 browser tests passed (103 Chromium, 103 WebKit). Fixed test settings are
-unchanged: catalog smoke test at 20 ms with three kept samples, responsiveness
+All 206 browser tests passed (103 Chromium, 103 WebKit). Baseline test settings: catalog smoke test at 20 ms with three kept samples, responsiveness
 at 50 ms with one round. These are reduced-compute-size tests, not a claim about
 production-size measurement equivalence.
 
@@ -154,7 +156,8 @@ coarse clocks and instrumentation overhead limit precision. Even hiding this
 entire measured cost would save under 1%. Moving commands earlier would also
 require preserving shared timer/query lifetimes, single-use command buffers and
 custom callback ordering. No production scheduling change is justified by this
-profile. Reports: `encode-webkit.json`, `encode-chromium.json`.
+profile. Chromium encoding was also small: 49.9 / 46.3 ms out of 8.581 / 8.866 s.
+Reports: `encode-webkit.json`, `encode-chromium.json`.
 
 ### Step 7 — cache calibration hints: defer on design grounds
 
@@ -173,7 +176,7 @@ Rather than sharing mutable GPU resources between kernels, the trial generated
 its deterministic CPU matrix/vector fixture on first access. Compute-only filtered
 runs avoided generating the unused 4096 × 4096 Float32 matrix (64 MiB). Bandwidth
 kernels received the same bytes and the same shared CPU object as before. The full
-catalog still needs this fixture, so this is specifically a filtered-run improvement.
+catalog still needs this fixture, so any allocation saving is limited to filtered runs.
 GPU buffer sharing is deferred: setup is roughly 1% of the warm representative
 suite, and shared allocations could change cache behavior or custom benchmark ownership.
 
@@ -205,3 +208,48 @@ Concurrent kernels would compete for bandwidth, execution capacity, caches and
 power. Even if total wall time fell, the result would describe contention instead
 of each kernel's isolated ceiling. No concurrent GPU trial was run. Browser tests
 and profiling runs remain sequential, particularly given the earlier freeze.
+
+### Follow-up to step 2 — shorter gaps in correctness tests only
+
+Trial: `idleMs: 10` in the full-catalog correctness smoke test only, previously
+100 ms. Every catalog kernel, compute size, target duration, minimum/maximum
+round setting and assertion is preserved. The separate responsiveness test still
+uses the production 100 ms idle default, and production measurement defaults are
+unchanged. This reduces intentional resting in a test whose assertions concern
+successful execution and finite positive results, not throughput equivalence.
+Retained after two full sequential Chromium/WebKit runs: **206/206 passed in each**.
+The final 36 unit tests, type checking and lint also passed, with two existing
+CLI lint warnings. No production measurement duration, warmup, idle, calibration
+growth limit or stopping threshold changed.
+
+| Measurement                               | Baseline | Candidate run 1 | Candidate run 2 |
+| ----------------------------------------- | -------: | --------------: | --------------: |
+| Chromium catalog smoke                    |  53.84 s |         18.81 s |         14.81 s |
+| WebKit catalog smoke                      |  49.28 s |         22.11 s |         21.91 s |
+| Chromium responsiveness                   |  15.36 s |         15.41 s |         15.36 s |
+| WebKit responsiveness                     |  15.40 s |         15.30 s |         15.35 s |
+| Chromium browser span                     |  70.67 s |         35.58 s |         31.75 s |
+| WebKit browser span                       |  65.85 s |         38.53 s |         38.40 s |
+| Vitest start through last test completion | 138.66 s |         75.66 s |         71.64 s |
+
+The two-run median total is 73.65 s, about **47% less than baseline** on this Mac.
+This is a correctness-test runtime improvement, not a production benchmark
+speedup or evidence of unchanged throughput scores under shorter idle gaps.
+The browser timer assertions passed; they do not independently prove the absence
+of an OS/driver-level desktop stall. Reports: `smoke-idle-tests-1.json`,
+`smoke-idle-tests-2.json`.
+
+## Commit trail
+
+| Step                                         | Commit    |
+| -------------------------------------------- | --------- |
+| Baseline and profiler                        | `75a9627` |
+| Short measurement trial                      | `55f9da1` |
+| Idle-gap trial                               | `a4fcea9` |
+| Shared overhead trial                        | `11a25f3` |
+| Async pipeline implementation and validation | `e008e98` |
+| Warmup reuse trial                           | `d8c54de` |
+| Encoding profile                             | `a894668` |
+| Calibration cache review                     | `873a314` |
+| Fixture allocation trial                     | `870180f` |
+| Statistical stopping and concurrency reviews | `fd65803` |

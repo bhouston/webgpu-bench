@@ -10,7 +10,10 @@ test('every kernel runs clean', { timeout: 120_000 }, async () => {
   // Check the entire catalog with three short samples per kernel. This is
   // a correctness smoke test, not a throughput/convergence benchmark; long
   // batches across the expanded catalog can exhaust the timeout in WebKit.
-  for await (const r of runSuite({ computeThreads: 4096, targetMs: 20, minRounds: 3, maxRounds: 3 })) {
+  // Keep the same workload and sampling coverage, with shorter idle gaps in
+  // this correctness-only test. The responsiveness test below uses the
+  // production idle default; throughput comparisons also keep that default.
+  for await (const r of runSuite({ computeThreads: 4096, targetMs: 20, minRounds: 3, maxRounds: 3, idleMs: 10 })) {
     if (r.status === 'running') continue;
     results.push(r);
   }
