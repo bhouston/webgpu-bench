@@ -38,8 +38,10 @@ describe('SuiteProgress', () => {
     p.onResult(row);
     expect(p.completedUnits).toBe(2);
     // Calibration contributes to elapsed time, never to the cost of future samples.
-    expect(p.remainingSeconds).toBeCloseTo(1.2);
-    expect(p.displayFraction).toBeCloseTo(2 / 3.2);
+    expect(p.remainingSeconds).toBeGreaterThan(0.6);
+    expect(p.remainingSeconds).toBeLessThan(0.7);
+    expect(p.displayFraction).toBeGreaterThan(0.74);
+    expect(p.displayFraction).toBeLessThan(0.77);
     p.finish();
     expect(p.fraction).toBe(1);
     expect(p.displayFraction).toBe(1);

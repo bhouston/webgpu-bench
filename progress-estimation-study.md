@@ -85,3 +85,23 @@ account for round boundaries and shrinking active sets. 39 core Node tests pass.
 
 This is an intermediate foundation: the fixed-five-sample stopping guess still
 has large errors. The CLI confidence-gate integration follows the next trials.
+
+### Trial 4: retain stopping-rule prediction
+
+Use effective sampling settings, the exact earliest convergence check, and a
+finite probability model for additional improvements (a quiet prior plus each
+kernel's observed improvement frequency). The model sums survival probability
+until the configured kept-sample cap. It predicts work; it does not alter which
+samples the scheduler collects. Retired/error kernels contribute no future work.
+
+| Dataset   | Percentage accuracy / coverage | ETA accuracy / coverage |
+| --------- | -----------------------------: | ----------------------: |
+| Synthetic |                  70.27 / 62.42 |           37.26 / 62.42 |
+| Chromium  |                    100 / 59.81 |           95.14 / 59.81 |
+| WebKit    |                  97.09 / 61.88 |           82.67 / 61.88 |
+
+Substantial improvement on both GPU datasets, particularly fixed-round runs.
+Synthetic mean percentage error increased from 20.64% to 23.12% despite better
+within-20% accuracy: cooldowns and late surprises still make some estimates very
+wrong. This motivates the next trial's revocable confidence gate rather than
+claiming the point prediction alone solves reliability.
