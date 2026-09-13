@@ -126,7 +126,7 @@ export const command = defineCommand({
       const line =
         fraction === null
           ? 'Estimating runtime…'
-          : `${bar(fraction)} ${String(percent).padStart(3)}%${eta !== null ? ` (${eta.toFixed(1)}s remaining)` : ''}`;
+          : `${bar(fraction)} ${String(percent).padStart(3)}%${eta !== null && eta >= 1 ? ` (${eta.toFixed(1)}s remaining)` : ''}`;
       if (line !== lastLine && (tty || !lastLine || visible !== lastVisible || bucket !== lastBucket)) {
         process.stderr.write(tty ? `\r${line}\x1b[K` : `${line}\n`);
         lastLine = line;

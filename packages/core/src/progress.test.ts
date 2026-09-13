@@ -137,6 +137,17 @@ test('withdraws on a discarded sample and can recover with subsequent evidence',
   round(5);
   setTime(1400);
   p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10, 10, 10], throttledMs: [15], done: false });
+  expect(p.displayFraction).toBeNull();
+  round(6);
+  setTime(1500);
+  p.onProgress({
+    type: 'sample',
+    id: 'a',
+    durationMs: 100,
+    timesMs: [10, 10, 10, 10, 10],
+    throttledMs: [15],
+    done: false,
+  });
   expect(p.displayFraction).not.toBeNull();
 });
 
@@ -167,4 +178,24 @@ test('can show a useful late percentage while withholding an uncertain ETA', () 
   expect(p.displayFraction).toBeGreaterThan(0.9);
   expect(p.remainingSeconds).toBeNull();
   expect(p.displayFraction).toBeLessThan(1);
+});
+
+test('one cheap noisy kernel does not invalidate a well-constrained larger suite', () => {
+  let time = 0;
+  const p = new SuiteProgress(10, () => time);
+  const ids = Array.from({ length: 10 }, (_, i) => `k${i}`);
+  const cfg = { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6, idleMs: 0 };
+  for (let n = 1; n <= 2; n++) {
+    p.onProgress({ type: 'round', round: n, active: 10, activeIds: ids, sampling: cfg, estimatedRemainingUnits: 60 });
+    for (const id of ids) {
+      const duration = id === 'k0' ? 1 : 100;
+      time += duration + (n === 1 ? 100 : 0);
+      p.onProgress(sample(id, duration, n));
+    }
+  }
+  expect(p.displayFraction).not.toBeNull();
+  p.onProgress({ type: 'round', round: 3, active: 10, activeIds: ids, sampling: cfg, estimatedRemainingUnits: 40 });
+  time++;
+  p.onProgress({ type: 'sample', id: 'k0', durationMs: 1, timesMs: [10, 10], throttledMs: [15], done: false });
+  expect(p.displayFraction).not.toBeNull();
 });

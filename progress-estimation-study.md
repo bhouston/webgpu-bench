@@ -156,3 +156,55 @@ Tests cover setup, calibration, effective settings, empty/legacy streams, separa
 ETA eligibility, expiry, pause/abort, discards, recovery and invalid/changed timing.
 Machine: Apple M3, macOS 27.0 (26A428). Fresh GPU validation follows without tuning
 these thresholds against its outcomes.
+
+### Trial 6 follow-up: retain uncertainty per benchmark
+
+The workload breakdown exposed poor coverage in ordinary short suites, and a
+recovery boundary could reopen after only one subsequent clean sample. Recovery
+now requires two complete later rounds before narrowing uncertainty again.
+An individual noisy kernel gets the full remaining retry-cap envelope (and an
+attempt/kept-sample rate correction), rather than invalidating the entire suite.
+Suite-wide cooldowns and visibility pauses still withdraw the whole estimate.
+Quiet, actually converged peers narrow the stability allowance by at most half.
+The earliest-work bound now also accounts for termination by the discarded-attempt
+cap; reaching that cap can finish earlier than collecting enough kept samples.
+
+On the original six-run datasets, percentage accuracy / coverage improves to
+**100 / 39.07 Chromium** and **100 / 37.16 WebKit**. Synthetic accuracy / coverage
+is **99.89 / 18.08**, versus the previous gate's **99.88 / 16.50**.
+The CLI omits sub-second ETAs and uses one decimal place for longer ETAs.
+
+Extended replay now includes **20 GPU traces**, including two 71-kernel full-catalog
+runs and noisy WebKit cooldown cases. API percentage accuracy is **100%** with
+**20.26% runtime coverage**; ETA accuracy is **100%** with **13.15% coverage**.
+A separate replay of actual TTY formatting and 100 ms refresh cadence gives
+**99.94% percentage accuracy / 20.26% coverage**, versus the old display's
+**26.12% / 99.68%**. Displayed ETA improves from **4.61% / 91.10%** to
+**100% / 11.62%**. The small remaining percentage misses occur in a short noisy
+single-kernel run; API accuracy is not a guarantee about rounded, held UI text.
+
+Coverage must not be hidden by the aggregate: representative default suites show
+percentages for **11–20%** of runtime; quiet fixed-six-round suites for **54–55%**.
+A 60.90 s full Chromium suite has **16.09%** coverage. A 72.56 s full WebKit suite
+with three cooldowns has **3.45%** coverage, and a noisy fixed-round WebKit run
+shows no estimate. These runs support hiding uncertain estimates, not a claim
+that progress can currently be shown throughout normal execution.
+
+The first 12 traces were used for development; eight fresh traces were subsequently
+reused while refining the gate, so the final combined result is not a locked
+holdout evaluation. An additional Chromium pair with a new shuffle seed, captured
+after the final refinement, reached **100% display accuracy / 34.23% coverage**.
+
+All **206 browser tests, 49 core Node tests, and 8 CLI tests pass**. Type checking
+and lint pass, with only the two pre-existing CLI function-scoping warnings.
+The compressed GPU trace fixture is committed for reproducibility; synthetic
+traces can be regenerated from the seeded scheduler harness.
+
+### User-suggested next trial: linear benchmark execution
+
+Evaluate one benchmark to completion before moving to the next. Distinguish an
+exact completed-benchmark count from an estimate of time completion: the former
+can always be shown honestly, but unequal benchmark costs can still make its
+percentage misleading as a time estimate. Compare linear order with round-robin
+on runtime, sample results, throttling, accuracy and coverage before deciding
+whether changing the default scheduler is justified.

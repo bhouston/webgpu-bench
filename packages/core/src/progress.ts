@@ -11,7 +11,10 @@ export class SuiteProgress {
   private finished = false;
   private activeIds: string[] = [];
   private pending = new Set<string>();
-  private samples = new Map<string, { durations: number[]; timesMs: number[]; throttledMs: number[]; done: boolean }>();
+  private samples = new Map<
+    string,
+    { durations: number[]; timesMs: number[]; throttledMs: number[]; done: boolean; unreliableUntil: number }
+  >();
   private roundSampled = false;
   private cfg = DEFAULT_SAMPLING;
   private calibrated = false;
@@ -45,13 +48,14 @@ export class SuiteProgress {
       const previous = this.samples.get(event.id);
       const durations = previous?.durations ?? [];
       const lastDuration = durations.at(-1);
+      let unreliableUntil = previous?.unreliableUntil ?? 0;
       if (
         event.throttledMs.length > (previous?.throttledMs.length ?? 0) ||
         !(event.durationMs > 0) ||
         !Number.isFinite(event.durationMs) ||
         (lastDuration !== undefined && Math.abs(event.durationMs / lastDuration - 1) > 0.2)
       ) {
-        this.blockedUntilRound = this.round + 2;
+        unreliableUntil = this.round + 2;
       }
       if (event.durationMs > 0 && Number.isFinite(event.durationMs)) durations.push(event.durationMs);
       this.samples.set(event.id, {
@@ -59,6 +63,7 @@ export class SuiteProgress {
         timesMs: event.timesMs,
         throttledMs: event.throttledMs,
         done: event.done,
+        unreliableUntil,
       });
       if (this.pending.size === 0) this.calibrated = true;
     }
@@ -122,11 +127,22 @@ export class SuiteProgress {
     return Math.max(minimum, expected);
   }
 
-  private estimateMs(mode: 'expected' | 'lower' | 'upper'): number | null {
-    if (!this.calibrated || this.finished || this.round < this.blockedUntilRound) return null;
+  private estimateMs(mode: 'expected' | 'lower' | 'upper', at: number): number | null {
+    if (!this.calibrated || this.finished || this.round <= this.blockedUntilRound) return null;
     const nextId = this.pending.values().next().value;
     const nextDuration = nextId ? this.samples.get(nextId)?.durations.at(-1) : undefined;
-    if (this.now() - this.updatedAt > Math.max(250, ((nextDuration ?? 0) + this.cfg.idleMs) * 1.5)) return null;
+    if (at - this.updatedAt > Math.max(250, ((nextDuration ?? 0) + this.cfg.idleMs) * 1.5)) return null;
+    const quietRetired = [...this.samples.values()].filter(
+      (s) =>
+        s.done &&
+        s.throttledMs.length === 0 &&
+        isBestStable(s.timesMs, {
+          minRuns: this.cfg.minRounds,
+          stableRuns: this.cfg.stableRounds,
+          tolerance: this.cfg.improvementTolerance,
+        }),
+    ).length;
+    const stabilityAllowance = this.cfg.stableRounds * Math.max(0.5, 1 - quietRetired / Math.max(1, this.samples.size));
     let estimate = 0,
       futureSamples = 0,
       futureRounds = 0,
@@ -136,14 +152,23 @@ export class SuiteProgress {
       if (state.done) continue;
       if (state.durations.length < 2) return null;
       const cap = Math.max(1, this.cfg.maxRounds - state.timesMs.length);
-      const expected = this.predictSamples(state.timesMs);
-      // Empirical envelope: allow another full stability window of improvements.
+      const uncertain = this.round <= state.unreliableUntil;
+      const attempts = state.timesMs.length + state.throttledMs.length;
+      const retryCap = Math.max(0, 2 * this.cfg.maxRounds - attempts - 1) + cap;
+      const expected = Math.min(
+        retryCap,
+        this.predictSamples(state.timesMs) * (uncertain ? attempts / Math.max(1, state.timesMs.length) : 1),
+      );
+      // Quiet peers narrow the empirical stability allowance; noisy kernels retain
+      // the full retry cap, so a cheap outlier need not hide a predictable suite.
       // It is intentionally not a confidence interval or a guarantee of future GPU behavior.
       const count =
         mode === 'lower'
-          ? this.minimumSamples(state.timesMs)
+          ? Math.min(this.minimumSamples(state.timesMs), Math.max(1, 2 * this.cfg.maxRounds - attempts))
           : mode === 'upper'
-            ? Math.min(cap, expected + this.cfg.stableRounds)
+            ? uncertain
+              ? retryCap
+              : Math.min(cap, expected + stabilityAllowance)
             : expected;
       if (mode === 'expected') this.remainingUnits += count;
       const mean = state.durations.reduce((a, b) => a + b, 0) / state.durations.length;
@@ -161,7 +186,7 @@ export class SuiteProgress {
     }
     const gaps = Math.max(0, currentSamples - (this.roundSampled ? 0 : 1)) + futureSamples - futureRounds;
     estimate += this.cfg.idleMs * gaps;
-    return Math.max(0, estimate - (this.now() - this.updatedAt));
+    return Math.max(0, estimate - (at - this.updatedAt));
   }
 
   /** @deprecated Use displayFraction; numeric compatibility returns 0 while indeterminate. */
@@ -172,21 +197,23 @@ export class SuiteProgress {
   /** Null means show an indeterminate status, not a percentage or a filled bar. */
   get displayFraction(): number | null {
     if (this.finished) return 1;
-    const remaining = this.estimateMs('expected');
+    const at = this.now();
+    const remaining = this.estimateMs('expected', at);
     if (remaining === null) return null;
-    const elapsed = this.now() - this.startTime;
-    const lower = this.estimateMs('lower')!;
-    const upper = this.estimateMs('upper')!;
+    const elapsed = at - this.startTime;
+    const lower = this.estimateMs('lower', at)!;
+    const upper = this.estimateMs('upper', at)!;
     if (Math.max(remaining - lower, upper - remaining) / (elapsed + remaining) > 0.2) return null;
     return Math.min(0.999, elapsed / Math.max(1, elapsed + remaining));
   }
 
   /** Unrounded seconds left; separately gated because an accurate percentage need not imply an accurate ETA. */
   get remainingSeconds(): number | null {
-    const remaining = this.estimateMs('expected');
+    const at = this.now();
+    const remaining = this.estimateMs('expected', at);
     if (remaining === null) return null;
-    const lower = this.estimateMs('lower')!;
-    const upper = this.estimateMs('upper')!;
+    const lower = this.estimateMs('lower', at)!;
+    const upper = this.estimateMs('upper', at)!;
     if (lower <= 0 || Math.max(remaining / lower - 1, 1 - remaining / upper) > 0.2) return null;
     return remaining / 1000;
   }

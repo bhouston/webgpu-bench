@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
+import { gunzipSync } from 'node:zlib';
 import { runSampling } from '../packages/core/dist/sampling.js';
 import { SuiteProgress } from '../packages/core/dist/progress.js';
 
@@ -241,12 +242,32 @@ const format = (g) =>
     ]),
   );
 
-function evaluate(traces, factory, gated) {
+function evaluate(traces, factory, gated, display = null) {
   const groups = {};
   for (const trace of traces) {
     let now = 0,
       index = 0;
     const p = factory(trace.count, () => now);
+    let nextRefresh = 100,
+      displayedFraction = null,
+      displayedEta = null,
+      lastPercent = -1,
+      renderEnabled = false;
+    const render = () => {
+      if (!renderEnabled) return;
+      const fraction = gated ? p.displayFraction : p.fraction;
+      const percent = fraction === null ? null : Math.floor(fraction * 100);
+      if (display === 'baseline' && percent === lastPercent) return;
+      lastPercent = percent;
+      displayedFraction = percent === null ? null : percent / 100;
+      const eta = p.remainingSeconds;
+      displayedEta =
+        fraction === null || eta === null || (display === 'candidate' && eta < 1)
+          ? null
+          : display === 'candidate'
+            ? +eta.toFixed(1)
+            : eta || null;
+    };
     const summary = (groups[trace.group] ??= {
       runtime: 0,
       fractionVisible: 0,
@@ -259,16 +280,29 @@ function evaluate(traces, factory, gated) {
     // Midpoint integration on a uniform grid, including time between events.
     const step = Math.min(50, trace.totalMs / 1000);
     for (let at = step / 2; at < trace.totalMs; at += step) {
-      while (index < trace.events.length && trace.events[index].at <= at) {
-        const e = trace.events[index++];
-        now = e.at;
-        if (e.kind === 'progress') p.onProgress(e.value);
-        else p.onResult(e.value);
+      while (true) {
+        const eventAt = trace.events[index]?.at ?? Infinity;
+        const tickAt = display === 'candidate' ? nextRefresh : Infinity;
+        if (Math.min(eventAt, tickAt) > at) break;
+        if (tickAt < eventAt) {
+          now = tickAt;
+          nextRefresh += 100;
+          render();
+        } else {
+          const e = trace.events[index++];
+          now = e.at;
+          if (e.kind === 'progress') p.onProgress(e.value);
+          else {
+            p.onResult(e.value);
+            renderEnabled = true;
+          }
+          if (display === 'candidate' || (display === 'baseline' && e.kind === 'result')) render();
+        }
       }
       now = at;
       summary.runtime += step;
-      const fraction = gated ? p.displayFraction : p.fraction;
-      const eta = p.remainingSeconds;
+      const fraction = display ? displayedFraction : gated ? p.displayFraction : p.fraction;
+      const eta = display ? displayedEta : p.remainingSeconds;
       for (const [key, estimate, truth] of [
         ['fraction', fraction, at / trace.totalMs],
         ['eta', eta, (trace.totalMs - at) / 1000],
@@ -289,7 +323,11 @@ function evaluate(traces, factory, gated) {
 }
 
 const traces = values.input
-  ? JSON.parse(readFileSync(values.input, 'utf8'))
+  ? JSON.parse(
+      values.input.endsWith('.gz')
+        ? gunzipSync(readFileSync(values.input)).toString('utf8')
+        : readFileSync(values.input, 'utf8'),
+    )
   : values.capture === 'synthetic'
     ? await synthetic()
     : await captureBrowser(values.capture);
@@ -299,8 +337,20 @@ const report = {
   runs: traces.length,
   baseline: evaluate(traces, (n, now) => new LegacyProgress(n, now), false),
   candidate: evaluate(traces, (n, now) => new SuiteProgress(n, now), gated),
+  baselineDisplay: evaluate(traces, (n, now) => new LegacyProgress(n, now), false, 'baseline'),
+  candidateDisplay: evaluate(traces, (n, now) => new SuiteProgress(n, now), gated, 'candidate'),
 };
 if (values.output) writeFileSync(values.output, JSON.stringify(report, null, 2) + '\n');
 console.log(
-  JSON.stringify({ runs: report.runs, baseline: report.baseline.total, candidate: report.candidate.total }, null, 2),
+  JSON.stringify(
+    {
+      runs: report.runs,
+      baseline: report.baseline.total,
+      candidate: report.candidate.total,
+      baselineDisplay: report.baselineDisplay.total,
+      candidateDisplay: report.candidateDisplay.total,
+    },
+    null,
+    2,
+  ),
 );
