@@ -3,8 +3,14 @@ import { runSuite } from './suite.ts';
 import { BENCHMARKS } from './catalog.ts';
 
 test('every kernel runs clean', { timeout: 120_000 }, async () => {
+  // The sampler intentionally pauses hidden pages; fail early if the test
+  // browser doesn't expose a visible document instead of timing out silently.
+  expect(document.visibilityState).toBe('visible');
   const results = [];
-  for await (const r of runSuite({ computeThreads: 4096, targetMs: 200 })) {
+  // Check the entire catalog with three short samples per kernel. This is
+  // a correctness smoke test, not a throughput/convergence benchmark; long
+  // batches across the expanded catalog can exhaust the timeout in WebKit.
+  for await (const r of runSuite({ computeThreads: 4096, targetMs: 20, minRounds: 3, maxRounds: 3 })) {
     if (r.status === 'running') continue;
     results.push(r);
   }

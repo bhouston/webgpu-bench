@@ -27,14 +27,21 @@ devices. Use it as a CLI or as a library embedded in your own tools.
 
 ```bash
 pnpm install
+pnpm exec playwright install chromium webkit
 pnpm build
 pnpm lint
 pnpm tsc
 pnpm test
 ```
 
-Requires a WebGPU-capable browser (recent Chrome/Edge desktop) for the browser tests. `f16`/`int8`-dot-
-product benchmarks report as "skipped" rather than failing when a device lacks the feature.
+Browser tests run in Playwright Chromium and WebKit, sequentially to avoid competing GPU workloads.
+
+```bash
+pnpm --filter webgpu-bench-core test:browser   # Both browsers (macOS with WebGPU)
+pnpm --filter webgpu-bench-core test:chromium # Chromium only
+pnpm --filter webgpu-bench-core test:webkit   # WebKit only
+```
+
 
 ## Author
 

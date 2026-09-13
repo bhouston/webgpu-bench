@@ -53,6 +53,8 @@ export interface KernelHarness extends MeasurementConfig {
 
 /** Never grow a calibration probe by more than this factor per step, so no probe can run away on a slow GPU. */
 const MAX_PROBE_GROWTH = 4;
+/** Enough bounded steps to reach the default cap even from a sub-millisecond probe. */
+const MAX_BATCH_PROBES = 12;
 
 /**
  * GPU timestamps are cross-checked against wall clock on every measurement.
@@ -180,14 +182,19 @@ export class KernelSampler {
     // Batch sizing: grow from a single dispatch until one measurement's wall
     // time is near the target. Wall clock over-estimates a tiny dispatch
     // (fixed submit/readback overhead dominates), so the first extrapolation
-    // under-shoots and a couple of refinement steps home in from below. The
+    // under-shoots and refinement steps home in from below. The
     // very first measurement never ends the search: it can absorb a one-off
     // stall (lazy shader compile, GC) that would leave the batch at 1.
     let iterations = 1;
-    for (let step = 0; step < 4; step++) {
+    for (let step = 0; step < MAX_BATCH_PROBES; step++) {
       const { wallMs } = await this.measureRaw(iterations);
       if ((step > 0 && wallMs >= targetMs / 2) || iterations >= maxIterations) break;
-      const next = Math.min(maxIterations, Math.floor((iterations * targetMs) / Math.max(wallMs, 1e-6)));
+      // WebKit's coarse wall clock can report 0ms for real GPU work. That
+      // means "below clock resolution", not "free": the old 1e-6 divisor
+      // could jump straight to 200,000 dispatches and freeze the display.
+      // Bound growth for every probe, including nonzero but noisy readings.
+      const wanted = wallMs > 0 ? (iterations * targetMs) / wallMs : iterations * MAX_PROBE_GROWTH;
+      const next = Math.min(maxIterations, Math.floor(Math.min(wanted, iterations * MAX_PROBE_GROWTH)));
       if (next <= iterations) break;
       iterations = next;
     }

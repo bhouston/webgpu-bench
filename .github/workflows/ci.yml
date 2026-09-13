@@ -40,4 +40,34 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        run: |
+          pnpm --filter webgpu-bench-core exec vitest run --project node --project browser-chromium
+          pnpm --filter webgpu-bench test
+
+  webkit:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 11.1.3
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright WebKit
+        run: pnpm exec playwright install webkit
+
+      - name: Test WebKit with WebGPU
+        run: pnpm --filter webgpu-bench-core test:webkit

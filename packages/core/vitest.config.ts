@@ -11,29 +11,28 @@ export default defineConfig({
           exclude: ['src/**/*.browser.test.ts'],
         },
       },
-      {
+      ...(['chromium', 'webkit'] as const).map((browser, index) => ({
         test: {
-          name: 'browser',
+          name: `browser-${browser}`,
           include: ['src/**/*.browser.test.ts'],
+          // GPU workloads must not compete with other test files or browsers.
+          fileParallelism: false,
+          sequence: { groupOrder: index + 1 },
           browser: {
             enabled: true,
-            // Playwright's `headless: true` launches the stripped "headless
-            // shell" binary, which has no GPU process and so no WebGPU.
-            // `--headless=new` on the full Chrome binary (headless: false
-            // here) is the real new-headless mode and does support WebGPU.
-            // Launch args only take effect via the provider's
-            // `launchOptions` (an `instances[].launch` key is not a real
-            // vitest browser option and is silently ignored).
+            // Use the full Chromium binary's new headless mode for WebGPU.
+            // WebKit uses its own headless mode, without Chromium flags.
+            headless: browser === 'webkit',
             provider: playwright({
-              launchOptions: {
-                args: ['--headless=new', '--enable-unsafe-webgpu', '--ignore-gpu-blocklist'],
-              },
+              launchOptions:
+                browser === 'chromium'
+                  ? { args: ['--headless=new', '--enable-unsafe-webgpu', '--ignore-gpu-blocklist'] }
+                  : {},
             }),
-            headless: false,
-            instances: [{ browser: 'chromium' }],
+            instances: [{ browser }],
           },
         },
-      },
+      })),
     ],
   },
 });
