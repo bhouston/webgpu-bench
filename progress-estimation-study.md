@@ -60,3 +60,28 @@ Added optional effective settings/ordered IDs on round events and sample events
 with wall duration excluding calibration/idle. No benchmark scheduling or stopping
 behavior changed. Added a fake-clock test confirming those exclusions. All 37
 core Node tests pass. Raw captures and reports are in `/tmp/webgpu-bench-progress`.
+
+### Trials 1–3: retain phase-aware, per-benchmark timing
+
+All trials replay the same trace prefixes. Values below are **within-20% accuracy /
+coverage**, both percentages. ETA uses unrounded seconds in the new API; the frozen
+baseline rounds to whole seconds, as it actually did.
+
+| Trial                                                | Synthetic percentage | Chromium percentage | Synthetic ETA |  Chromium ETA |
+| ---------------------------------------------------- | -------------------: | ------------------: | ------------: | ------------: |
+| Baseline                                             |          33.40 / 100 |         11.21 / 100 | 11.01 / 84.47 |     0 / 87.46 |
+| 1: consume units, exclude setup                      |          25.28 / 100 |          0.98 / 100 | 12.31 / 84.46 |     0 / 87.46 |
+| 2: separate sample wall time + idle                  |        46.78 / 62.42 |        7.73 / 59.81 | 17.29 / 62.42 |  0.40 / 59.81 |
+| 3: weight each active benchmark, remove retired work |        65.53 / 62.42 |       79.09 / 59.81 | 24.80 / 62.42 | 16.86 / 59.81 |
+
+Trials 1 and 2 alone did not meet the goal; retained their accounting fixes as
+part of trial 3's demonstrably better model. WebKit trial 3: percentage **76.85 /
+61.88**, versus baseline **12.61 / 100**; ETA **16.03 / 61.88**, versus **0 / 87.69**.
+Six runs per browser: two each of representative 11-kernel suites, a single
+kernel, and a fixed-six-round suite, at production workload sizes. Calibration
+must finish for every scheduled kernel before showing estimates. Percentage now
+measures wall-time completion, not how many rows have arrived. Remaining idle gaps
+account for round boundaries and shrinking active sets. 39 core Node tests pass.
+
+This is an intermediate foundation: the fixed-five-sample stopping guess still
+has large errors. The CLI confidence-gate integration follows the next trials.
