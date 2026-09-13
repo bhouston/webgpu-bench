@@ -35,7 +35,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | 0    | Runtime breakdown and baseline            | Complete           | 206 browser tests pass; profiling harness added.                                 |
 | 1    | Shorter precision-aware measurements (#1) | Rejected for now   | 20 ms increased cooldowns, runtime and score instability in both browsers.       |
 | 2    | Work-proportional idle gaps (#2)          | Deferred           | 50 ms improved runtime but failed the WebKit score screen.                       |
-| 3    | Share empty-submit overhead probes (#4)   | Pending            | Preserve per-sample timestamp cross-checks.                                      |
+| 3    | Share empty-submit overhead probes (#4)   | Rejected           | Runtime benefit was marginal; one WebKit score shifted beyond the screen.        |
 | 4    | Async pipeline preparation (#6)           | Pending            | Preserve error reporting and isolate compilation from measurement.               |
 | 5    | Reuse calibration/warmup work (#3)        | Pending            | Avoid selecting headline samples based on favorable calibration timings.         |
 | 6    | Encode during idle (#8)                   | Pending            | Evaluate remaining CPU encoding cost and resource hazards.                       |
@@ -93,3 +93,16 @@ has not passed the agreed screen. Keep the existing configurable `idleMs` and
 100 ms default. A work-proportional policy remains deferred, rather than assuming
 these constant-gap results justify changing rest on every device.
 Reports: `idle-webkit.json`, `idle-chromium.json`, `idle-confirm-webkit.json`.
+
+### Step 3 — shared overhead probes: trial reverted
+
+Implemented a device-local estimate refreshed every 16 calibrations, with a unit
+test verifying the reduced empty-submit count and refresh. All 35 unit tests,
+type checking and lint passed. The per-sample timestamp cross-check was unchanged.
+
+ABBA medians: WebKit 8.697 to 8.668 s (-0.3%); Chromium 8.624 to 8.435 s (-2.2%).
+The observed end-to-end gain is small relative to run variation. WebKit's
+layout-soa score shifted -9.77%, while the other ten median shifts were within 1%.
+This does not prove the cache caused that outlier, but it fails the acceptance
+screen and does not justify extra timer-state complexity. Reverted the trial
+implementation and its cache-specific test. Reports: `overhead-*.json`.
