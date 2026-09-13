@@ -39,7 +39,7 @@ node scripts/profile-suite.mjs --browser webkit \
 | 4    | Async pipeline preparation (#6)           | Retained for stability | Fully compiled pipelines before calibration; no demonstrated warm-run speedup.   |
 | 5    | Reuse calibration/warmup work (#3)        | Deferred               | Removing warmup saves 11–17%, but WebKit score equivalence remains inconclusive. |
 | 6    | Encode during idle (#8)                   | Deferred               | WebKit encoding consumes under 1% of representative suite time.                  |
-| 7    | Cache calibration hints (#5)              | Pending                | First-run versus repeat-run benefit must be explicit.                            |
+| 7    | Cache calibration hints (#5)              | Deferred               | No first-run benefit; stale hints need bounded device-local validation.          |
 | 8    | Share immutable buffers (#7)              | Pending                | Check remaining setup cost and cache effects.                                    |
 | 9    | Statistical stopping (#9)                 | Pending                | Existing best-of-N stopping already adapts; mean CI is not a CI for the minimum. |
 | 10   | Concurrent kernels (#10)                  | Rejected by design     | Would measure contention rather than isolated kernel ceilings.                   |
@@ -155,3 +155,14 @@ entire measured cost would save under 1%. Moving commands earlier would also
 require preserving shared timer/query lifetimes, single-use command buffers and
 custom callback ordering. No production scheduling change is justified by this
 profile. Reports: `encode-webkit.json`, `encode-chromium.json`.
+
+### Step 7 — cache calibration hints: defer on design grounds
+
+Each `runSuite` acquires a device and destroys it at completion. A device-local
+cache therefore cannot accelerate a later suite without changing that lifecycle;
+a persistent cache needs identity and invalidation for browser, GPU, shader,
+workload size and power/thermal state. It offers no first-run saving. Calibration
+currently starts small and caps growth at 4×, the safeguard added after the freeze.
+Jumping to a stale batch size would weaken that safeguard. A safe repeat-run
+hint design may be useful, but was not implemented or measured in this pass.
+This is a design deferral, not evidence that caching can never help.
