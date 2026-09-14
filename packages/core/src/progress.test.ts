@@ -126,26 +126,10 @@ describe('coverage-first SuiteProgress', () => {
     expect(p.fraction).toBe(1);
   });
 
-  test('round-robin also estimates unseen calibration and work instead of waiting for two full rounds', () => {
-    let t = 0;
-    const p = new SuiteProgress(10, () => t);
-    p.onProgress(
-      round(
-        1,
-        Array.from({ length: 10 }, (_, i) => `k${i}`),
-        { samplingOrder: 'round-robin' },
-      ),
-    );
-    t = 400;
-    p.onProgress(sample('k0', 1));
-    expect(p.remainingSeconds).toBeGreaterThan(5);
-    expect(p.displayFraction).not.toBeNull();
-    expect(p.isApproximate).toBe(true);
-  });
-
   test.each([0, NaN, Infinity])('invalid duration %s cannot turn an estimate into NaN', (durationMs) => {
     const p = new SuiteProgress(3, () => 100);
-    p.onProgress(round(1, ['a', 'b', 'c'], { samplingOrder: 'round-robin' }));
+    p.onProgress({ type: 'benchmark-start', id: 'a' });
+    p.onProgress(round(1, ['a']));
     p.onProgress({ ...sample('a', 1), durationMs } as SuiteProgressEvent);
     expect(Number.isFinite(p.remainingSeconds)).toBe(true);
     expect(Number.isFinite(p.displayFraction)).toBe(true);

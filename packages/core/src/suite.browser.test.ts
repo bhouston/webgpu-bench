@@ -35,8 +35,8 @@ test(
   'the page stays responsive during a real run: a 200ms poll timer never falls badly behind',
   { timeout: 60_000 },
   async () => {
-    // Responsiveness is a property of runSampling's round-robin/idle-gap
-    // scheduling, not of any one kernel — one round across every real kernel
+    // Responsiveness is a property of runSampling's sequential/idle-gap
+    // scheduling, not of any one kernel — one sample from every real kernel
     // exercises that strategy without paying for full convergence.
     const pollMs = 200;
     const ticks: number[] = [];

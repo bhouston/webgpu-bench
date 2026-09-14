@@ -15,7 +15,6 @@ devices.
 
 ```sh
 npx webgpu-bench                        # or: npm i -g webgpu-bench && webgpu-bench
-webgpu-bench --sampling-order round-robin # optional interleaved comparison
 webgpu-bench --filter 'f16-*'           # glob on benchmark ids
 webgpu-bench --no-report                # don't submit the run to web3dsurvey.com
 webgpu-bench --json                     # machine-readable output

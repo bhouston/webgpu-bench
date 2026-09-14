@@ -76,11 +76,7 @@ tab, still return `null`. Only `finish()` returns 100%. `completedBenchmarks` an
 `benchmarkCount` provide an exact work count independent of the time estimate.
 `remainingSeconds` is unrounded and remains available below one second.
 
-Set `samplingOrder: 'round-robin'` to retain interleaved measurement for comparison.
-Its progress model learns from observed samples and estimates unseen work from
-budget/timing observations instead of waiting for complete rounds. Scheduling
-order can affect calibration, timing-method selection and thermal behavior; it
-is not a claim of identical scores across orders. See the
+Benchmarks always run sequentially. See the
 [experiment report](../../progress-estimation-study.md) for measured coverage,
 accuracy, and limitations.
 
@@ -156,7 +152,7 @@ performance changes.
 ## Sampling methodology
 
 Benchmarks run one at a time in catalog order, producing final results throughout
-the run. `samplingOrder: 'round-robin'` retains interleaved sampling for comparisons.
+the run.
 
 1. Prepares all kernels up front, so unsupported ones resolve as `skipped` immediately.
 2. Calibrates per-dispatch work for kernels with a work knob toward `targetDispatchMs` (10ms); fixed-work
@@ -165,8 +161,7 @@ the run. `samplingOrder: 'round-robin'` retains interleaved sampling for compari
 4. Reports the best (fastest) run — noise only ever slows a measurement down, never speeds it up.
 5. Converges once the best stops improving (`minRounds`/`stableRounds`), up to a `maxRounds` cap.
 6. Discards runs >20% slower than the current best as thermal noise (`throttledMs`, not `stats`).
-7. Pauses after two consecutive discards in sequential mode; after the suite-wide `maxCooldowns` budget, flags that row and continues.
-   Round-robin mode instead uses cross-kernel agreement and a suite-wide cooldown budget.
+7. Pauses after two consecutive discards; after the suite-wide `maxCooldowns` budget, flags that row and continues.
 
 All of the above are tunable via `SuiteOptions`. Timing prefers GPU `timestamp-query` and falls back to
 wall-clock, cross-checking one against the other every measurement (Safari's timestamps are unreliable

@@ -83,11 +83,6 @@ export const command = defineCommand({
         default: true,
         describe: `Submit results to ${SITE} (--no-report to keep them local)`,
       })
-      .option('sampling-order', {
-        choices: ['sequential', 'round-robin'] as const,
-        default: 'sequential' as const,
-        describe: 'Complete benchmarks in order or interleave them for comparison',
-      })
       .option('json', { type: 'boolean', default: false, describe: 'Print results as JSON instead of a table' })
       .option('api-host', { type: 'string', default: 'https://api.web3dsurvey.com', hidden: true }),
   handler: async (argv) => {
@@ -156,7 +151,7 @@ export const command = defineCommand({
     renderProgress();
     const timer = setInterval(renderProgress, 100);
     try {
-      for await (const r of runSuite({ benchmarks, samplingOrder: argv.samplingOrder, onDeviceInfo, onProgress })) {
+      for await (const r of runSuite({ benchmarks, onDeviceInfo, onProgress })) {
         results.set(r.id, r);
         progress.onResult(r);
         renderProgress();

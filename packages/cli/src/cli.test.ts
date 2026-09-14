@@ -29,7 +29,6 @@ test('--help lists the options', async () => {
   expect(result).toSucceed();
   expect(result).toHaveStdout(/--filter/);
   expect(result).toHaveStdout(/--no-report/);
-  expect(result).toHaveStdout(/--sampling-order/);
 });
 
 test('--version prints the package version', async () => {

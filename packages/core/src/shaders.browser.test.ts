@@ -5,7 +5,7 @@ import { acquireGpuContext } from './gpu/context.ts';
 
 // Template for a fast, single-kernel compile+run check to write alongside a
 // new shader — fails in under a second instead of after the whole suite's
-// round-robin scheduler runs. See docs/vitest-browser-migration.md.
+// sequential scheduler runs. See docs/vitest-browser-migration.md.
 test('f32-rsqrt compiles and runs', async () => {
   const ctx = await acquireGpuContext();
   try {

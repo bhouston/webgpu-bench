@@ -116,8 +116,6 @@ export type SuiteProgressEvent =
   | { type: 'throttle-abort'; throttledIds: string[] };
 
 export interface SuiteOptions {
-  /** Complete each benchmark in catalog order by default; opt into interleaving for comparisons. */
-  samplingOrder?: 'sequential' | 'round-robin';
   /**
    * Which benchmarks to run — this package's own `BENCHMARKS` by default.
    * Pass a filtered subset, your own `BenchmarkDefinition`s, or a mix of
@@ -168,14 +166,8 @@ export interface SuiteOptions {
   idleMs?: number;
   /** How long the whole suite pauses when it detects throttling, in ms. Default 3000. */
   cooldownMs?: number;
-  /** Suite-wide cooldown budget. Once exhausted, sequential mode flags noisy kernels and continues with later ones. Default 3. */
+  /** Suite-wide cooldown budget. Once exhausted, flags noisy kernels and continues with later ones. Default 3. */
   maxCooldowns?: number;
-  /**
-   * Round-robin only. Suite-wide throttle trigger: a cooldown starts when at least this
-   * fraction (and at least two) of the benchmarks measured in a round come
-   * back throttled. Default 0.5.
-   */
-  throttledFraction?: number;
   /** Number of GPU threads (invocations) launched by the raw-FLOPS compute benchmarks. Default 1,048,576. */
   computeThreads?: number;
   /**

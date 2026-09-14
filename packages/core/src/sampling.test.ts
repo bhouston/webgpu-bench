@@ -1,19 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  recordSample,
-  resolveSamplingConfig,
-  roundIsThrottled,
-  runSampling as runScheduledSampling,
-  type RunSamplingOptions,
-  type Sampleable,
-  type SampleState,
-} from './sampling.ts';
+import { recordSample, resolveSamplingConfig, runSampling, type Sampleable, type SampleState } from './sampling.ts';
 import type { SuiteProgressEvent } from './types.ts';
 
-const cfg = resolveSamplingConfig({ samplingOrder: 'round-robin', idleMs: 0, cooldownMs: 0, throttleThreshold: 0.1 });
-const runSampling = (benchmarks: readonly Sampleable[], options: RunSamplingOptions = {}) =>
-  runScheduledSampling(benchmarks, { samplingOrder: 'round-robin', ...options });
-
+const cfg = resolveSamplingConfig({ idleMs: 0, cooldownMs: 0, throttleThreshold: 0.1 });
 function freshState(id = 'k'): SampleState {
   return { id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY };
 }
@@ -64,41 +53,7 @@ describe('recordSample', () => {
   });
 });
 
-describe('roundIsThrottled', () => {
-  it('needs at least two throttled benchmarks and the configured fraction', () => {
-    expect(roundIsThrottled([true, false, false, false], cfg)).toBe(false);
-    expect(roundIsThrottled([true, true, false, false], cfg)).toBe(true);
-    expect(roundIsThrottled([true, true, false], cfg)).toBe(true);
-    expect(roundIsThrottled([true, false, false], cfg)).toBe(false);
-  });
-
-  it('ignores one persistently noisy benchmark among healthy ones', () => {
-    expect(roundIsThrottled([true, false, false, false, false, false], cfg)).toBe(false);
-  });
-
-  it('never triggers on a single benchmark', () => {
-    expect(roundIsThrottled([true], cfg)).toBe(false);
-  });
-});
-
 describe('runSampling', () => {
-  it('interleaves benchmarks round-robin and calibrates each exactly once', async () => {
-    const log: string[] = [];
-    const a = scripted('a', [10, 10, 10], log);
-    const b = scripted('b', [20, 20, 20], log);
-    const results = await runSampling([a, b], { idleMs: 0 });
-    expect(log.filter((e) => e.endsWith(':calibrate'))).toHaveLength(2);
-    // Every round measures both once; the order within a round is random.
-    const samples = log.filter((e) => e.endsWith(':sample'));
-    expect(samples).toHaveLength(6);
-    for (let i = 0; i < samples.length; i += 2) {
-      expect(new Set(samples.slice(i, i + 2))).toEqual(new Set(['a:sample', 'b:sample']));
-    }
-    expect(results.get('a')!.stopReason).toBe('converged');
-    expect(results.get('a')!.stats!.min).toBe(10);
-    expect(results.get('b')!.timesMs).toEqual([20, 20, 20]);
-  });
-
   it('retires converged benchmarks while others keep sampling', async () => {
     const log: string[] = [];
     const quick = scripted('quick', [10, 10, 10], log);
@@ -109,10 +64,10 @@ describe('runSampling', () => {
     expect(results.get('ramping')!.stopReason).toBe('converged');
   });
 
-  it('pauses the suite on a throttled round, then recovers and keeps the best', async () => {
+  it('pauses after consecutive discards, then recovers and keeps the best', async () => {
     const events: SuiteProgressEvent[] = [];
     const sleeps: number[] = [];
-    // Both benchmarks: one clean sample, then two throttled rounds (device hot), then clean again.
+    // Both benchmarks: one clean sample, then two discarded samples (device hot), then clean again.
     const a = scripted('a', [10, 15, 15, 10, 10]);
     const b = scripted('b', [20, 30, 30, 20, 20]);
     const results = await runSampling([a, b], {
@@ -133,27 +88,17 @@ describe('runSampling', () => {
     expect(results.get('b')!.stopReason).toBe('converged');
   });
 
-  it('does not pause for one noisy benchmark while the others are healthy', async () => {
-    const events: SuiteProgressEvent[] = [];
-    const noisy = scripted('noisy', [10, 13, 13, 10, 12, 10]);
-    const a = scripted('a', [20, 20, 20]);
-    const b = scripted('b', [30, 30, 30]);
-    const results = await runSampling([noisy, a, b], {
-      idleMs: 0,
-      throttleThreshold: 0.1,
-      onProgress: (e) => events.push(e),
-      sleep: async () => {},
-    });
-    expect(events.filter((e) => e.type === 'cooldown')).toHaveLength(0);
-    expect(results.get('noisy')!.stopReason).toBe('converged');
-    expect(results.get('noisy')!.throttledMs).toEqual([13, 13, 12]);
-  });
-
   it('caps a benchmark that only ever comes back throttled on its own', async () => {
     const events: SuiteProgressEvent[] = [];
     const stuck = scripted('stuck', [10, 20]); // one good run, then slow forever
-    const results = await runSampling([stuck], { idleMs: 0, maxRounds: 5, onProgress: (e) => events.push(e) });
-    expect(events.filter((e) => e.type === 'cooldown')).toHaveLength(0);
+    const results = await runSampling([stuck], {
+      idleMs: 0,
+      maxRounds: 5,
+      maxCooldowns: 10,
+      sleep: async () => {},
+      onProgress: (e) => events.push(e),
+    });
+    expect(events.filter((e) => e.type === 'cooldown')).toHaveLength(4);
     expect(results.get('stuck')!.stopReason).toBe('max-rounds');
     expect(results.get('stuck')!.timesMs).toEqual([10]);
     expect(results.get('stuck')!.throttledMs).toHaveLength(9);
@@ -199,7 +144,7 @@ describe('runSampling', () => {
     expect(String((results.get('zero')!.error as Error).message)).toMatch(/did no work/);
   });
 
-  it("estimates remaining units from each benchmark's own progress, shrinking as benchmarks converge", async () => {
+  it('reports remaining sample units for the current benchmark', async () => {
     const events: SuiteProgressEvent[] = [];
     // cfg: minRounds=3, stableRounds=2 (defaults) → converges once the best hasn't improved over 2 kept samples.
     const quick = scripted('quick', [10, 10, 10]);
@@ -207,13 +152,10 @@ describe('runSampling', () => {
     await runSampling([quick, slow], { ...cfg, onProgress: (e) => events.push(e) });
     const rounds = events.filter((e): e is Extract<SuiteProgressEvent, { type: 'round' }> => e.type === 'round');
 
-    // Round 1: neither has any kept samples yet, so both estimate a full typical run.
-    expect(rounds[0]!.estimatedRemainingUnits).toBe((cfg.minRounds + cfg.stableRounds) * 2);
-    // Monotonically non-increasing as rounds progress and benchmarks accumulate samples/converge.
-    for (let i = 1; i < rounds.length; i++) {
-      expect(rounds[i]!.estimatedRemainingUnits).toBeLessThanOrEqual(rounds[i - 1]!.estimatedRemainingUnits);
-    }
-    // Once only "slow" is left active, remaining reflects just that one benchmark (floored at 1).
+    // Unit telemetry describes the current benchmark's remaining samples.
+    expect(rounds[0]!.estimatedRemainingUnits).toBe(cfg.minRounds + cfg.stableRounds);
+    expect(rounds.every((e) => e.active === 1)).toBe(true);
+    // The final event reflects the last benchmark, floored at one sample.
     const lastRound = rounds.at(-1)!;
     expect(lastRound.active).toBe(1);
     expect(lastRound.estimatedRemainingUnits).toBeGreaterThanOrEqual(1);
@@ -257,13 +199,13 @@ it('reports wall-time telemetry without charging calibration or idle to samples'
     expect.objectContaining({ durationMs: 25, done: true, timesMs: [10] }),
     expect.objectContaining({ durationMs: 25, done: true, timesMs: [10] }),
   ]);
-  expect(events[0]).toMatchObject({ type: 'round', sampling: { minRounds: 1, maxRounds: 1, idleMs: 100 } });
+  expect(events[1]).toMatchObject({ type: 'round', sampling: { minRounds: 1, maxRounds: 1, idleMs: 100 } });
 });
 
 it('completes benchmarks in input order by default, calibrating each once and resting between samples', async () => {
   const log: string[] = [],
     sleeps: number[] = [];
-  const result = await runScheduledSampling([scripted('a', [10], log), scripted('b', [20], log)], {
+  const result = await runSampling([scripted('a', [10], log), scripted('b', [20], log)], {
     idleMs: 100,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -286,7 +228,7 @@ it('completes benchmarks in input order by default, calibrating each once and re
 it('cools a sequential kernel after two discards and continues with untouched kernels after its budget expires', async () => {
   const events: SuiteProgressEvent[] = [],
     sleeps: number[] = [];
-  const result = await runScheduledSampling([scripted('hot', [10, 15]), scripted('good', [10])], {
+  const result = await runSampling([scripted('hot', [10, 15]), scripted('good', [10])], {
     idleMs: 0,
     cooldownMs: 3000,
     maxCooldowns: 1,
@@ -307,17 +249,14 @@ it('cools a sequential kernel after two discards and continues with untouched ke
 
 it('shares a finite cooldown budget across sequential benchmarks', async () => {
   const pauses: number[] = [];
-  const result = await runScheduledSampling(
-    [scripted('hot-a', [10, 15]), scripted('hot-b', [10, 15]), scripted('good', [10])],
-    {
-      maxCooldowns: 1,
-      idleMs: 0,
-      cooldownMs: 3000,
-      sleep: async (ms) => {
-        pauses.push(ms);
-      },
+  const result = await runSampling([scripted('hot-a', [10, 15]), scripted('hot-b', [10, 15]), scripted('good', [10])], {
+    maxCooldowns: 1,
+    idleMs: 0,
+    cooldownMs: 3000,
+    sleep: async (ms) => {
+      pauses.push(ms);
     },
-  );
+  });
   expect(pauses).toEqual([3000]);
   expect(result.get('hot-a')!.stopReason).toBe('throttled');
   expect(result.get('hot-b')!.stopReason).toBe('throttled');

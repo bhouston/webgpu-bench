@@ -7,7 +7,7 @@ Baseline: `2231170`. Existing package-version edits are unrelated and excluded f
 The strict-gating decision below was the wrong tradeoff: it hid the ETA for most
 of the run. The revised target is **at least 90% ETA visibility**, while improving
 accuracy and marking uncertain predictions as approximate. The latest implementation
-uses sequential sampling by default and continuously refines an early timing budget
+uses sequential sampling exclusively and continuously refines an early timing budget
 from completed benchmarks. It achieved **100% ETA coverage** in six captured GPU
 runs, with **79.51%** of displayed ETA time within 20% of actual remaining time
 (Chromium 95.06%, WebKit 67.86%). These are local observations, not a guarantee.
@@ -66,7 +66,8 @@ Experiments and retained changes will be recorded here as they finish.
 events: percentage accuracy within 20% **33.40%**, coverage **100%**; ETA accuracy
 **11.01%**, coverage **84.47%**. Heavy stress cases deliberately exceed ordinary
 workload variability; they are not an estimate of production failure frequency.
-The frozen baseline implementation is retained in the replay script.
+The frozen baseline implementation was retained in the replay script at that
+revision; the final simplification removes it from current code.
 
 Added optional effective settings/ordered IDs on round events and sample events
 with wall duration excluding calibration/idle. No benchmark scheduling or stopping
@@ -324,52 +325,36 @@ runtime estimator is required for that display. The retained exact-count fallbac
 already supports that definition. The time estimator remains separately gated
 for callers that still want an elapsed-time percentage/ETA.
 
-## Reproduce the research
+## Reproduce the current research
 
-Run from the repository root. Profiling is opt-in, sequential, uses the local GPU,
-and does not submit results to an external service. Raw development captures are
-in `/tmp/webgpu-bench-progress`; compressed GPU and linear-trial fixtures are
-retained in `scripts/fixtures/`.
+Run from the repository root. GPU collection is opt-in and sequential, and does
+not submit results externally. The current harness evaluates the sequential
+estimator only. Historical comparison implementations and their reproduction
+commands are preserved in git at `a88af4c`; the measurements above and compressed
+historical fixtures remain as research evidence.
 
 ```sh
 pnpm --filter webgpu-bench-core build
 
-# Re-run the seeded 144-run stress set against the frozen baseline and current API/UI.
+# Replay the six retained sequential GPU traces.
+node scripts/progress-experiment.mjs \
+  --input scripts/fixtures/coverage-sequential-traces.json.gz \
+  --output /tmp/progress-gpu.json
+
+# Re-run the seeded 144-run sequential stress set.
 node scripts/progress-experiment.mjs --capture synthetic \
   --output /tmp/progress-synthetic.json
 
-# Replay all 20 retained GPU traces (includes full catalogs and cooldown cases).
-node scripts/progress-experiment.mjs \
-  --input scripts/fixtures/progress-gpu-traces.json.gz \
-  --output /tmp/progress-gpu.json
-
-# Collect new traces. --groups also accepts single, fixed and all.
-node scripts/progress-experiment.mjs --capture chromium --seed 401 \
+# Collect new traces. --groups also accepts single and all.
+node scripts/progress-experiment.mjs --capture chromium \
   --repeats 1 --groups representative,fixed \
   --traces /tmp/progress-new-traces.json --output /tmp/progress-new.json
-
-# Reproduce the historical per-kernel-cooldown variant (not the current default).
-node scripts/linear-progress-experiment.mjs --prepare /tmp/progress-linear-dist
-node scripts/profile-suite.mjs --browser webkit \
-  --candidate-root /tmp/progress-linear-dist \
-  --candidate '{"maxRounds":10}' --reference-options '{"maxRounds":10,"samplingOrder":"round-robin"}' \
-  --repeats 2 --output /tmp/progress-linear-profile.json
-
-# Summarize the preserved full-catalog comparisons without running the GPU.
-node scripts/linear-progress-experiment.mjs \
-  --report scripts/fixtures/linear-all-chromium.json.gz \
-  --report scripts/fixtures/linear-all-webkit.json.gz \
-  --output /tmp/progress-linear-summary.json
 ```
 
-The replay reports both raw API estimates and TTY-style displayed estimates
-(whole percentages, one-decimal ETAs, event updates plus a
-100 ms refresh). The revised display renders immediately and retains subsecond
-ETAs with a 0.1-second display floor; historical strict-gate results above used
-a one-second cutoff. Non-TTY logs are historical snapshots rather than a continuously
-visible estimate. Coverage integrates time between events; the completion instant
-itself is excluded. The synthetic and captured GPU workloads are complementary,
-not a claim about how often real users encounter each kind of noise.
+The replay reports raw API and TTY-style estimates (whole percentages, one-decimal
+ETAs with a 0.1-second display floor, event updates and a 100 ms refresh). Coverage
+integrates time between events, excluding completion itself. Historical traces
+without benchmark-start telemetry require their historical implementation.
 
 ## Retained commits
 
@@ -399,13 +384,13 @@ shown only when the suite finishes. Exact completed-test counts remain available
 1. **Relax the round-robin confidence gate.** Supply budgets for unobserved
    calibration/samples and keep estimates through finite cooldowns. This recovered
    visibility but left the changing mix of active kernels difficult to predict.
-   Retain this as support for callers explicitly selecting round-robin.
+   Initially retained as optional support; removed by the simplification below.
 2. **Complete tests sequentially and learn whole-test durations.** Start with
    calibration, sampling and idle budgets, then use completed benchmark durations
    to estimate unfinished tests. Deduct the current test's elapsed work without
    consuming future tests' budgets. This yields early completed results and a
-   simpler forecast. Retained as the default, with `samplingOrder: 'round-robin'`
-   and CLI `--sampling-order round-robin` for comparisons.
+   simpler forecast. Initially retained with an optional comparison mode, which
+   the subsequent simplification removed.
 3. **Reject per-test cooldown budgets.** The initial native sequential WebKit
    trial ran the full catalog in 107.63 seconds; ETA coverage was 99.84%, but only
    20.40% of displayed ETA time was within 20%. Repeated cooldowns defeated the
@@ -423,8 +408,8 @@ The scheduler retains calibration, best-of-N stopping, sample caps, idle gaps,
 hidden-page sample rejection and error reporting. Sequential thermal detection
 uses two consecutive discarded measurements instead of cross-kernel agreement.
 This can change benchmark scores and their thermal exposure; the prior comparison
-results above do not establish score equivalence. The scheduling option allows
-continued investigation without blocking the improved default experience.
+results above do not establish score equivalence. Historical versions in git retain the comparison implementation for further
+investigation.
 
 ### Final measurements
 
@@ -471,3 +456,29 @@ fallback, sequential completion order and the shared cooldown cap.
 Final revision validation: **206 browser tests, 51 core Node tests and 8 CLI tests
 pass**. TypeScript passes; lint has only the two existing CLI function-scoping
 warnings. Existing package-version edits remain excluded from the commit.
+
+## Simplification: sequential execution only
+
+Removed the alternate scheduling implementation, random shuffling, cross-kernel
+throttle detection, their public options/exports and the CLI scheduling flag.
+The scheduler is now a direct loop over benchmarks with an inner sampling loop.
+Removed the alternate ETA predictor and its sample/calibration histories. Removed
+the obsolete experimental scheduler, frozen baseline estimator and shuffle-seed
+injection from research tooling. Historical results remain in this report and
+fixtures; current code contains only sequential execution.
+
+Replaying the six retained sequential GPU traces produces identical API and
+display metrics: **100% ETA coverage**, **79.51% displayed ETA accuracy within
+20%**, and **91.21% displayed percentage accuracy within 20%**. The 144 synthetic
+runs also preserve the previous aggregate results. This is a simplification,
+not a newly claimed accuracy improvement.
+
+Validation: 45 core Node tests pass. The browser suite initially passed 205 of
+206 tests; WebKit's 350 ms responsiveness limit saw 599 ms and then 427 ms timer
+gaps. An isolated control at `a88af4c` passed, followed by a passing isolated run
+of the simplified code (15.85 s and 15.92 s respectively). No thresholds were
+relaxed. Twelve deterministic before/after scheduler comparisons also matched
+events, elapsed time and results, excluding the removed configuration fields.
+The transient browser failures remain recorded rather than claiming a clean
+first-pass suite. All 8 CLI tests and TypeScript pass; lint retains only the two
+existing CLI warnings. Unrelated package-version edits are excluded.

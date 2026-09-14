@@ -65,15 +65,10 @@ try {
       const page = await browser.newPage();
       await page.goto(`http://127.0.0.1:${server.address().port}/`);
       const result = await page.evaluate(
-        async ({ variant: mode, options: suiteOptions, ids, seed }) => {
+        async ({ variant: mode, options: suiteOptions, ids }) => {
           const { runSuite, BENCHMARKS } = await import(`/${mode}/suite.js`);
           const { KernelSampler } = await import(`/${mode}/gpu/benchmarkRunner.js`);
-          // Same shuffle order within each comparison pair; no change to GPU timers.
-          let randomState = seed;
-          Math.random = () => {
-            randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
-            return randomState / 2 ** 32;
-          };
+
           const phases = { prepareMs: 0, calibrateMs: 0, sampleMs: 0, encodeMs: 0 };
           for (const [method, key] of [
             ['calibrate', 'calibrateMs'],
@@ -160,7 +155,7 @@ try {
             benchmarkCount: selected.length,
           };
         },
-        { variant, options: options[variant], ids: values.ids, seed: 1234 + repeat },
+        { variant, options: options[variant], ids: values.ids },
       );
       report.runs.push({ repeat, variant, ...result });
       writeFileSync(values.output, `${JSON.stringify(report, null, 2)}\n`);

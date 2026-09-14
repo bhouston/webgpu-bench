@@ -92,9 +92,8 @@ function sharedTimer(device: GPUDevice, supported: boolean): GpuTimer {
 }
 
 /**
- * Takes individual timed measurements of one kernel on demand, so a
- * scheduler can interleave many kernels round-robin (see `runSampling`)
- * instead of hammering one kernel until it converges. Holds the GPU timer
+ * Takes individual timed measurements of one kernel on demand. The scheduler
+ * controls idle gaps and convergence (see `runSampling`). Holds the GPU timer
  * and the calibrated batch size between calls.
  *
  * Lifecycle: `calibrate()` once (sizes the dispatch and the batch, runs the

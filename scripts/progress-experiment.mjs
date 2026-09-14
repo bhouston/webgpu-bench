@@ -20,35 +20,6 @@ const { values } = parseArgs({
   },
 });
 
-// Frozen implementation at 2231170, before any estimator changes.
-class LegacyProgress {
-  completedUnits = 0;
-  measuredUnits = 0;
-  startTime = 0;
-  constructor(count, now) {
-    this.count = count;
-    this.now = now;
-    this.remainingUnits = count * 6;
-  }
-  onProgress(e) {
-    if (e.type !== 'round') return;
-    this.remainingUnits = e.estimatedRemainingUnits;
-    if (e.round === 1) this.startTime = this.now();
-  }
-  onResult() {
-    this.completedUnits++;
-    if (this.completedUnits > this.count) this.measuredUnits++;
-  }
-  get fraction() {
-    const total = this.completedUnits + this.remainingUnits;
-    return total ? this.completedUnits / total : 0;
-  }
-  get remainingSeconds() {
-    if (this.measuredUnits < 3 || this.remainingUnits === 0) return null;
-    return Math.round((((this.now() - this.startTime) / this.measuredUnits) * this.remainingUnits) / 1000);
-  }
-}
-
 function random(seed) {
   return () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -58,82 +29,76 @@ function random(seed) {
 
 async function synthetic() {
   const traces = [];
-  const originalRandom = Math.random;
-  try {
-    for (const family of [
-      'stable',
-      'ramping',
-      'mixed',
-      'noisy-tail',
-      'cooldown',
-      'late-slowdown',
-      'expensive-tail',
-      'errors',
-      'fixed-rounds',
-      'long-calibration',
-      'tiny',
-      'late-improvement',
-    ]) {
-      for (let seed = 1; seed <= 12; seed++) {
-        const rng = random((seed + Number(values.seed) - 1) * 71);
-        Math.random = rng;
-        let time = 0;
-        const events = [];
-        const count = family === 'tiny' ? 1 : 4 + (seed % 9);
-        const push = (kind, value) => events.push({ at: time, kind, value });
-        const rows = Array.from({ length: count }, (_, i) => ({
-          id: `k${i}`,
-          status: 'running',
-          timesMs: [],
-          throttledMs: [],
-        }));
-        for (const row of rows) {
-          time += 10 + rng() * 30;
-          push('result', row);
-        }
-        const kernels = rows.map((row, index) => {
-          let attempt = 0;
-          const cost = family === 'expensive-tail' && index === 0 ? 1500 : 50 + rng() * 200;
-          return {
-            id: row.id,
-            calibrate: async () => {
-              time += (family === 'long-calibration' ? 2000 : 150) + rng() * 150;
-            },
-            sample: async () => {
-              attempt++;
-              time += cost * (0.96 + rng() * 0.08) * (family === 'late-slowdown' && attempt >= 3 ? 3 : 1);
-              if (family === 'errors' && index % 3 === 0 && attempt === 2) throw new Error('scripted error');
-              if (family === 'cooldown' && attempt >= 2 && attempt <= 4) return 18;
-              if (family === 'noisy-tail' && index === 0 && attempt > 1 && attempt < 10) return 18;
-              if (family === 'late-improvement' && attempt === 3) return 8;
-              if (family === 'late-improvement' && attempt > 3) return 8;
-              if (family === 'ramping' || (['mixed', 'expensive-tail'].includes(family) && index % 3 === 0))
-                return 10 * 0.92 ** Math.min(attempt, 4 + (seed % 5));
-              return 10 * (1 + rng() * 0.005);
-            },
-          };
-        });
-        await runSampling(kernels, {
-          ...(family === 'fixed-rounds' ? { minRounds: 6, maxRounds: 6 } : {}),
-          now: () => time,
-          sleep: async (ms) => {
-            time += ms;
-          },
-          onProgress: (e) => push('progress', e),
-          onUpdate: (s) =>
-            push('result', {
-              id: s.id,
-              status: s.error ? 'error' : s.stopReason ? 'ok' : 'running',
-              timesMs: s.timesMs,
-              throttledMs: s.throttledMs,
-            }),
-        });
-        time += 5;
-        traces.push({ name: `${family}-${seed}`, group: family, count, totalMs: time, events });
+  for (const family of [
+    'stable',
+    'ramping',
+    'mixed',
+    'noisy-tail',
+    'cooldown',
+    'late-slowdown',
+    'expensive-tail',
+    'errors',
+    'fixed-rounds',
+    'long-calibration',
+    'tiny',
+    'late-improvement',
+  ]) {
+    for (let seed = 1; seed <= 12; seed++) {
+      const rng = random((seed + Number(values.seed) - 1) * 71);
+      let time = 0;
+      const events = [];
+      const count = family === 'tiny' ? 1 : 4 + (seed % 9);
+      const push = (kind, value) => events.push({ at: time, kind, value });
+      const rows = Array.from({ length: count }, (_, i) => ({
+        id: `k${i}`,
+        status: 'running',
+        timesMs: [],
+        throttledMs: [],
+      }));
+      for (const row of rows) {
+        time += 10 + rng() * 30;
+        push('result', row);
       }
+      const kernels = rows.map((row, index) => {
+        let attempt = 0;
+        const cost = family === 'expensive-tail' && index === 0 ? 1500 : 50 + rng() * 200;
+        return {
+          id: row.id,
+          calibrate: async () => {
+            time += (family === 'long-calibration' ? 2000 : 150) + rng() * 150;
+          },
+          sample: async () => {
+            attempt++;
+            time += cost * (0.96 + rng() * 0.08) * (family === 'late-slowdown' && attempt >= 3 ? 3 : 1);
+            if (family === 'errors' && index % 3 === 0 && attempt === 2) throw new Error('scripted error');
+            if (family === 'cooldown' && attempt >= 2 && attempt <= 4) return 18;
+            if (family === 'noisy-tail' && index === 0 && attempt > 1 && attempt < 10) return 18;
+            if (family === 'late-improvement' && attempt === 3) return 8;
+            if (family === 'late-improvement' && attempt > 3) return 8;
+            if (family === 'ramping' || (['mixed', 'expensive-tail'].includes(family) && index % 3 === 0))
+              return 10 * 0.92 ** Math.min(attempt, 4 + (seed % 5));
+            return 10 * (1 + rng() * 0.005);
+          },
+        };
+      });
+      await runSampling(kernels, {
+        ...(family === 'fixed-rounds' ? { minRounds: 6, maxRounds: 6 } : {}),
+        now: () => time,
+        sleep: async (ms) => {
+          time += ms;
+        },
+        onProgress: (e) => push('progress', e),
+        onUpdate: (s) =>
+          push('result', {
+            id: s.id,
+            status: s.error ? 'error' : s.stopReason ? 'ok' : 'running',
+            timesMs: s.timesMs,
+            throttledMs: s.throttledMs,
+          }),
+      });
+      time += 5;
+      traces.push({ name: `${family}-${seed}`, group: family, count, totalMs: time, events });
     }
-  } finally {
-    Math.random = originalRandom;
   }
   return traces;
 }
@@ -174,13 +139,8 @@ async function captureBrowser(name) {
         const page = await browser.newPage();
         await page.goto(`http://127.0.0.1:${server.address().port}/`);
         const trace = await page.evaluate(
-          async ({ group: workload, runSeed }) => {
+          async ({ group: workload }) => {
             const { runSuite, BENCHMARKS } = await import('/suite.js');
-            let seed = runSeed;
-            Math.random = () => {
-              seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-              return seed / 2 ** 32;
-            };
             const ids =
               workload === 'single'
                 ? ['f32-div']
@@ -214,7 +174,7 @@ async function captureBrowser(name) {
             }
             return { count: benchmarks.length, totalMs: performance.now() - start, events };
           },
-          { group, runSeed: 4320 + Number(values.seed) + repeat },
+          { group },
         );
         traces.push({ name: `${name}-${group}-${repeat}`, group: `${name}-${group}`, ...trace });
         console.error(`${traces.at(-1).name}: ${(trace.totalMs / 1000).toFixed(2)}s`);
@@ -242,33 +202,27 @@ const format = (g) =>
     ]),
   );
 
-function evaluate(traces, factory, gated, display = null) {
+function evaluate(traces, display = false) {
   const groups = {};
   for (const trace of traces) {
     let now = 0,
       index = 0;
-    const p = factory(trace.count, () => now);
+    if (!trace.events.some((e) => e.kind === 'progress' && e.value.type === 'benchmark-start'))
+      throw new Error(
+        `Trace ${trace.name} lacks sequential benchmark-start telemetry; use its historical revision for replay.`,
+      );
+    const p = new SuiteProgress(trace.count, () => now);
     let nextRefresh = 100,
       displayedFraction = null,
-      displayedEta = null,
-      lastPercent = -1,
-      renderEnabled = display === 'candidate';
+      displayedEta = null;
     const render = () => {
-      if (!renderEnabled) return;
-      const fraction = gated ? p.displayFraction : p.fraction;
+      const fraction = p.displayFraction;
       const percent = fraction === null ? null : Math.floor(fraction * 100);
-      if (display === 'baseline' && percent === lastPercent) return;
-      lastPercent = percent;
       displayedFraction = percent === null ? null : percent / 100;
       const eta = p.remainingSeconds;
-      displayedEta =
-        fraction === null || eta === null
-          ? null
-          : display === 'candidate'
-            ? +Math.max(0.1, eta).toFixed(1)
-            : eta || null;
+      displayedEta = fraction === null || eta === null ? null : +Math.max(0.1, eta).toFixed(1);
     };
-    if (display === 'candidate') render();
+    if (display) render();
     const summary = (groups[trace.group] ??= {
       runtime: 0,
       fractionVisible: 0,
@@ -283,7 +237,7 @@ function evaluate(traces, factory, gated, display = null) {
     for (let at = step / 2; at < trace.totalMs; at += step) {
       while (true) {
         const eventAt = trace.events[index]?.at ?? Infinity;
-        const tickAt = display === 'candidate' ? nextRefresh : Infinity;
+        const tickAt = display ? nextRefresh : Infinity;
         if (Math.min(eventAt, tickAt) > at) break;
         if (tickAt < eventAt) {
           now = tickAt;
@@ -293,16 +247,13 @@ function evaluate(traces, factory, gated, display = null) {
           const e = trace.events[index++];
           now = e.at;
           if (e.kind === 'progress') p.onProgress(e.value);
-          else {
-            p.onResult(e.value);
-            renderEnabled = true;
-          }
-          if (display === 'candidate' || (display === 'baseline' && e.kind === 'result')) render();
+          else p.onResult(e.value);
+          if (display) render();
         }
       }
       now = at;
       summary.runtime += step;
-      const fraction = display ? displayedFraction : gated ? p.displayFraction : p.fraction;
+      const fraction = display ? displayedFraction : p.displayFraction;
       const eta = display ? displayedEta : p.remainingSeconds;
       for (const [key, estimate, truth] of [
         ['fraction', fraction, at / trace.totalMs],
@@ -333,22 +284,17 @@ const traces = values.input
     ? await synthetic()
     : await captureBrowser(values.capture);
 if (values.traces) writeFileSync(values.traces, JSON.stringify(traces));
-const gated = 'displayFraction' in SuiteProgress.prototype;
 const report = {
   runs: traces.length,
-  baseline: evaluate(traces, (n, now) => new LegacyProgress(n, now), false),
-  candidate: evaluate(traces, (n, now) => new SuiteProgress(n, now), gated),
-  baselineDisplay: evaluate(traces, (n, now) => new LegacyProgress(n, now), false, 'baseline'),
-  candidateDisplay: evaluate(traces, (n, now) => new SuiteProgress(n, now), gated, 'candidate'),
+  candidate: evaluate(traces),
+  candidateDisplay: evaluate(traces, true),
 };
 if (values.output) writeFileSync(values.output, JSON.stringify(report, null, 2) + '\n');
 console.log(
   JSON.stringify(
     {
       runs: report.runs,
-      baseline: report.baseline.total,
       candidate: report.candidate.total,
-      baselineDisplay: report.baselineDisplay.total,
       candidateDisplay: report.candidateDisplay.total,
     },
     null,
