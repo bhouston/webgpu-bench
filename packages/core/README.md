@@ -65,7 +65,8 @@ renderProgress(progress.displayFraction, progress.remainingSeconds);
 
 Import `SuiteProgress` from `webgpu-bench-core`. Poll the getters periodically as
 well as after events: a long dispatch can make an earlier estimate unreliable.
-Percentage and ETA are independently gated to an empirical roughly-20% error
+`completedBenchmarks` and `benchmarkCount` provide an exact count that can always
+be shown, including while the runtime estimate is indeterminate. Percentage and ETA are independently gated to an empirical roughly-20% error
 envelope, after calibration and repeated timing observations. Cooldowns, hidden
 pages, discarded samples and timing changes can withdraw an estimate. This is
 an estimate of wall-time completion, not a count of completed benchmarks, and it

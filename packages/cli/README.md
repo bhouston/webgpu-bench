@@ -21,7 +21,7 @@ webgpu-bench --json                     # machine-readable output
 ```
 
 Progress appears on stderr once timing evidence supports a roughly 20%-accurate estimate. Until then,
-or if the estimate becomes unreliable, it shows `Estimating runtime…`. ETA has its own stricter gate.
+or if the estimate becomes unreliable, it shows an exact completed-benchmark count and `Estimating runtime…`. ETA has its own stricter gate.
 The results table goes to stdout once the run completes.
 By default a finished run is submitted to [Web3D Survey](https://web3dsurvey.com/benchmark) and its result
 page URL is printed.

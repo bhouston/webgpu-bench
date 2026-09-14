@@ -5,6 +5,7 @@ import type { BenchmarkResult, SuiteProgressEvent } from './types.ts';
 /** Wall-time progress; displayFraction is null while the estimate lacks evidence. */
 export class SuiteProgress {
   completedUnits = 0;
+  private readonly terminalIds = new Set<string>();
   remainingUnits: number;
   private readonly startTime: number;
   private updatedAt: number;
@@ -22,7 +23,7 @@ export class SuiteProgress {
   private blockedUntilRound = 0;
 
   constructor(
-    benchmarkCount: number,
+    readonly benchmarkCount: number,
     private readonly now: () => number = () => performance.now(),
   ) {
     this.remainingUnits = benchmarkCount * (DEFAULT_SAMPLING.minRounds + DEFAULT_SAMPLING.stableRounds);
@@ -70,8 +71,16 @@ export class SuiteProgress {
     this.updatedAt = this.now();
   };
 
-  /** Rows populate result tables; scheduler telemetry accounts for work exactly once. */
-  onResult = (_result: BenchmarkResult): void => {};
+  /** Exact completed-test count, independent of any runtime estimate. */
+  get completedBenchmarks(): number {
+    return this.terminalIds.size;
+  }
+
+  /** Terminal rows advance the exact count once; sampling telemetry predicts time. */
+  onResult = (result: BenchmarkResult): void => {
+    if (result.status === 'ok' || result.status === 'skipped' || result.status === 'error')
+      this.terminalIds.add(result.id);
+  };
 
   finish(): void {
     this.finished = true;

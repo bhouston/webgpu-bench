@@ -208,3 +208,36 @@ can always be shown honestly, but unequal benchmark costs can still make its
 percentage misleading as a time estimate. Compare linear order with round-robin
 on runtime, sample results, throttling, accuracy and coverage before deciding
 whether changing the default scheduler is justified.
+
+### Exact completed-test fallback: retained
+
+`SuiteProgress.completedBenchmarks` now counts unique terminal results (`ok`,
+`skipped`, or `error`), and `benchmarkCount` exposes the total. The CLI shows
+`Completed X of Y benchmarks · Estimating runtime…` while wall-time progress is
+uncertain, including in non-TTY logs as each result finishes. This provides an
+exact, always-available work count without implying that each test costs the same
+time. Duplicate terminal rows do not double count. 50 core Node tests pass.
+
+### Linear-order trial: experimental setup
+
+The isolated research variant runs one prepared benchmark through calibration and
+sampling to completion, then advances in catalog order. Preparation remains shared
+and upfront, with one GPU device for the suite. Sample duration, warmups,
+convergence rule, configured caps and the 100 ms inter-sample idle remain the same.
+Two consecutive discards of the current kernel trigger its cooldown; a per-kernel
+cooldown budget replaces round-robin's cross-kernel thermal consensus. That policy
+change is explicit: executing only one kernel cannot supply cross-kernel consensus.
+The trial runs only in temporary compiled modules, not in the production scheduler.
+
+Two alternating pairs (ABBA), 11 representative production-size benchmarks,
+`maxRounds: 10`, matched seeds within pairs. Chromium results:
+
+- Median runtime: round-robin **8.709 s**, linear **9.151 s** (+5.1%).
+- First final result: round-robin **75.7–77.7%** of runtime, linear **6.5–9.1%**.
+- Nonzero completed-count coverage: round-robin **22.3–24.3%**, linear **90.9–93.5%**.
+- If that count fraction is interpreted as elapsed-time fraction: round-robin
+  within-20% accuracy **13.0–15.2%**, linear **87.3–90.6%**.
+- No cooldowns or discarded samples. All median score shifts within **3.4%**.
+
+These count-as-time percentages are a secondary screen; `X of Y completed` itself
+is exact in either scheduler. Further browser/workload results follow below.

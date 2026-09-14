@@ -9,6 +9,7 @@ const { values } = parseArgs({
   options: {
     browser: { type: 'string', default: 'webkit' },
     reference: { type: 'string' },
+    'candidate-root': { type: 'string' },
     candidate: { type: 'string', default: '{}' },
     'reference-options': { type: 'string', default: '{}' },
     repeats: { type: 'string', default: '2' },
@@ -24,7 +25,7 @@ if (!values.output || !['webkit', 'chromium'].includes(values.browser))
   throw new Error('Provide --output <JSON file> and --browser webkit|chromium');
 const roots = {
   reference: resolve(values.reference ?? 'packages/core/dist'),
-  candidate: resolve('packages/core/dist'),
+  candidate: resolve(values['candidate-root'] ?? 'packages/core/dist'),
 };
 const options = { reference: JSON.parse(values['reference-options']), candidate: JSON.parse(values.candidate) };
 const repeats = Number(values.repeats);
@@ -116,6 +117,8 @@ try {
             },
           }));
           const rows = [];
+          const completion = [{ at: 0, completed: 0 }];
+          const completedIds = new Set();
           const events = [];
           let deviceInfo;
           let maxTimerGapMs = 0;
@@ -137,12 +140,25 @@ try {
               },
               onProgress: (event) => events.push(event),
             })) {
-              if (row.status !== 'running') rows.push(row);
+              if (row.status !== 'running') {
+                rows.push(row);
+                completedIds.add(row.id);
+                completion.push({ at: performance.now() - start, completed: completedIds.size });
+              }
             }
           } finally {
             clearInterval(timer);
           }
-          return { elapsedMs: performance.now() - start, phases, maxTimerGapMs, deviceInfo, rows, events };
+          return {
+            elapsedMs: performance.now() - start,
+            phases,
+            maxTimerGapMs,
+            deviceInfo,
+            rows,
+            events,
+            completion,
+            benchmarkCount: selected.length,
+          };
         },
         { variant, options: options[variant], ids: values.ids, seed: 1234 + repeat },
       );

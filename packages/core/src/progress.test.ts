@@ -199,3 +199,21 @@ test('one cheap noisy kernel does not invalidate a well-constrained larger suite
   p.onProgress({ type: 'sample', id: 'k0', durationMs: 1, timesMs: [10, 10], throttledMs: [15], done: false });
   expect(p.displayFraction).not.toBeNull();
 });
+
+test('completed benchmark count is exact while runtime is unknown and deduplicates terminal rows', () => {
+  const p = new SuiteProgress(3);
+  const result = (id: string, status: BenchmarkResult['status']) => ({ ...row, id, status });
+  p.onResult(result('a', 'running'));
+  expect(p.completedBenchmarks).toBe(0);
+  p.onResult(result('a', 'ok'));
+  p.onResult(result('a', 'ok'));
+  p.onResult(result('b', 'skipped'));
+  expect(p.completedBenchmarks).toBe(2);
+  expect(p.benchmarkCount).toBe(3);
+  expect(p.displayFraction).toBeNull();
+  p.onResult(result('c', 'error'));
+  expect(p.completedBenchmarks).toBe(3);
+  expect(p.displayFraction).toBeNull();
+  p.finish();
+  expect(p.displayFraction).toBe(1);
+});

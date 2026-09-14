@@ -104,6 +104,7 @@ export const command = defineCommand({
     let lastLine = '';
     let lastBucket: number | null = null;
     let lastVisible = false;
+    let lastCompleted = -1;
     let renderEnabled = false;
     const tty = process.stderr.isTTY;
     const bar = (fraction: number) => {
@@ -125,13 +126,21 @@ export const command = defineCommand({
       // Decimal seconds avoid large rounding errors for short remaining durations.
       const line =
         fraction === null
-          ? 'Estimating runtime…'
+          ? `Completed ${progress.completedBenchmarks} of ${progress.benchmarkCount} benchmarks · Estimating runtime…`
           : `${bar(fraction)} ${String(percent).padStart(3)}%${eta !== null && eta >= 1 ? ` (${eta.toFixed(1)}s remaining)` : ''}`;
-      if (line !== lastLine && (tty || !lastLine || visible !== lastVisible || bucket !== lastBucket)) {
+      if (
+        line !== lastLine &&
+        (tty ||
+          !lastLine ||
+          visible !== lastVisible ||
+          bucket !== lastBucket ||
+          progress.completedBenchmarks !== lastCompleted)
+      ) {
         process.stderr.write(tty ? `\r${line}\x1b[K` : `${line}\n`);
         lastLine = line;
         lastBucket = bucket;
         lastVisible = visible;
+        lastCompleted = progress.completedBenchmarks;
       }
     };
     const onProgress: typeof progress.onProgress = (event) => {
