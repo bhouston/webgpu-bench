@@ -1,6 +1,6 @@
 {
   "name": "webgpu-bench-core",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Benchmark suite for WebGPU's raw ceilings: memory bandwidth and fp32/fp16/int8 FLOPS.",
   "keywords": [
     "bandwidth",
