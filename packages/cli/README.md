@@ -6,12 +6,15 @@
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 
 Run the [webgpu-bench-core](https://www.npmjs.com/package/webgpu-bench-core) GPU benchmark suite from the
-command line, no browser needed (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)).
+command line, no browser needed (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)). Read the
+[announcement post](https://ben3d.ca/blog/introducing-webgpu-bench).
 
 This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
 operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on your GPU, so you can
 make better-informed decisions when writing shaders — and understand how those costs differ across
 devices.
+
+![webgpu-bench CLI running](../../assets/benchmarking.webp)
 
 ```sh
 npx webgpu-bench                        # or: npm i -g webgpu-bench && webgpu-bench
@@ -28,6 +31,8 @@ By default a finished run is submitted to [Web3D Survey](https://web3dsurvey.com
 page URL is printed.
 
 ## Example output
+
+![webgpu-bench CLI results for a filtered run](../../assets/benchmark-results.webp)
 
 ```
 webgpu-bench v0.9.0
