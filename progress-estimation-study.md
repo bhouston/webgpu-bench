@@ -241,3 +241,133 @@ Two alternating pairs (ABBA), 11 representative production-size benchmarks,
 
 These count-as-time percentages are a secondary screen; `X of Y completed` itself
 is exact in either scheduler. Further browser/workload results follow below.
+
+### Linear-order trial: WebKit and the full Chromium catalog
+
+WebKit's two representative ABBA pairs:
+
+- Median runtime **8.485 s round-robin / 9.186 s linear** (+8.3%).
+- First result **65.2–77.6% / 9.5%** of runtime.
+- Nonzero count coverage **22.4–34.8% / 90.5%**.
+- Count-as-time within-20% accuracy **17.2–20.5% / 69.0–84.8%**.
+- No discards/cooldowns in either mode. Median `layout-soa` score changed **-9.2%**
+  and `f16-fma-mat4` **-13.7%**. Both modes used CPU-wallclock timing, but FP16's
+  calibrated batch changed from 42 to 256 inner iterations. Other shifts were
+  within 3.4%. This does not isolate which calibration/order effect caused the
+  difference, but it does not establish measurement equivalence.
+
+A full 71-kernel Chromium pair is substantially more favorable for count progress:
+
+| Measure                           | Round-robin |   Linear |
+| --------------------------------- | ----------: | -------: |
+| Total time                        |    58.840 s | 59.002 s |
+| First final result (% of runtime) |      75.90% |    1.59% |
+| Nonzero count coverage            |      24.13% |   98.39% |
+| Count-as-time accuracy within 20% |      23.94% |   98.62% |
+| Mean relative count-as-time error |      44.48% |    2.86% |
+
+No discards/cooldowns occurred. Two layout scores shifted **+11.0% and +11.7%**;
+this single pair is insufficient to attribute those shifts to the scheduler.
+The early completed-count cadence is a real benefit of linear execution.
+The representative trials and this first full-catalog trial used a plain 100 ms
+sleep in the research variant; the follow-up variant reuses the production
+`realSleep` including its browser-idle callback. The production scheduler has
+not changed. A deterministic check of the variant also passed serial order,
+calibration, idle spacing, consecutive-discard cooldowns, budget exhaustion and
+continuation to a healthy next benchmark.
+
+### Linear-order trial: full WebKit catalog and decision
+
+The follow-up full 71-kernel WebKit pair uses the production idle helper in both
+variants:
+
+| Measure                            | Round-robin |   Linear |
+| ---------------------------------- | ----------: | -------: |
+| Total time                         |    68.369 s | 60.671 s |
+| First final result (% of runtime)  |      59.98% |    1.72% |
+| Nonzero count coverage             |      40.00% |   98.23% |
+| Count-as-time accuracy within 20%  |      66.73% |   93.88% |
+| Mean relative count-as-time error  |      23.22% |    6.02% |
+| Cooldowns / discarded measurements |      3 / 23 |    0 / 0 |
+
+Linear execution improves cadence and avoids cooldowns in this pair. Seven scores
+shift more than 5%, including `f16-div` (-49.1%) and `f32-sincos` (-24.3%). Those
+two reference rows were flagged `throttled` and used GPU timestamps; their linear
+counterparts converged using CPU-wallclock timing with different calibration
+batch sizes. Thus the score differences are **not proof that linear execution is
+worse**: the reference itself has suspect measurements, and timing-method changes
+confound an equivalence comparison. Other layout/atomic scores also change.
+
+**Decision:** keep exact completed-test progress in the production CLI and keep
+the linear scheduler as a reproducible research variant for now. It is a strong
+candidate for a simpler scheduling design: full-catalog nonzero progress coverage
+rises to about 98%, versus 24–40% with round-robin. However, these Mac-only trials
+do not establish equivalent benchmark measurements, and linear thermal detection
+requires a different policy. No production scheduling change is made merely to
+make a progress bar easier to estimate. The count itself remains exact under
+both schedulers, independently of whether its fraction matches wall time.
+
+If the product chooses completed tests as its definition of progress, no ETA or
+runtime estimator is required for that display. The retained exact-count fallback
+already supports that definition. The time estimator remains separately gated
+for callers that still want an elapsed-time percentage/ETA.
+
+## Reproduce the research
+
+Run from the repository root. Profiling is opt-in, sequential, uses the local GPU,
+and does not submit results to an external service. Raw development captures are
+in `/tmp/webgpu-bench-progress`; compressed GPU and linear-trial fixtures are
+retained in `scripts/fixtures/`.
+
+```sh
+pnpm --filter webgpu-bench-core build
+
+# Re-run the seeded 144-run stress set against the frozen baseline and current API/UI.
+node scripts/progress-experiment.mjs --capture synthetic \
+  --output /tmp/progress-synthetic.json
+
+# Replay all 20 retained GPU traces (includes full catalogs and cooldown cases).
+node scripts/progress-experiment.mjs \
+  --input scripts/fixtures/progress-gpu-traces.json.gz \
+  --output /tmp/progress-gpu.json
+
+# Collect new traces. --groups also accepts single, fixed and all.
+node scripts/progress-experiment.mjs --capture chromium --seed 401 \
+  --repeats 1 --groups representative,fixed \
+  --traces /tmp/progress-new-traces.json --output /tmp/progress-new.json
+
+# Prepare an isolated linear scheduler using the current compiled kernels.
+node scripts/linear-progress-experiment.mjs --prepare /tmp/progress-linear-dist
+node scripts/profile-suite.mjs --browser webkit \
+  --candidate-root /tmp/progress-linear-dist \
+  --candidate '{"maxRounds":10}' --reference-options '{"maxRounds":10}' \
+  --repeats 2 --output /tmp/progress-linear-profile.json
+
+# Summarize the preserved full-catalog comparisons without running the GPU.
+node scripts/linear-progress-experiment.mjs \
+  --report scripts/fixtures/linear-all-chromium.json.gz \
+  --report scripts/fixtures/linear-all-webkit.json.gz \
+  --output /tmp/progress-linear-summary.json
+```
+
+The replay reports both raw API estimates and TTY-style displayed estimates
+(whole percentages, one-decimal ETAs of at least one second, event updates plus a
+100 ms refresh). Non-TTY logs are historical snapshots rather than a continuously
+visible estimate. Coverage integrates time between events; the completion instant
+itself is excluded. The synthetic and captured GPU workloads are complementary,
+not a claim about how often real users encounter each kind of noise.
+
+## Retained commits
+
+| Commit    | Change                                                                       |
+| --------- | ---------------------------------------------------------------------------- |
+| `869938f` | Telemetry, frozen baseline and repeatable accuracy/coverage experiments      |
+| `ef0ebc9` | Per-benchmark wall-time model, calibration exclusion and work accounting     |
+| `cbd9f02` | Actual convergence/configuration-based work prediction                       |
+| `c0e5681` | Revocable, separate percentage/ETA confidence gates and CLI integration      |
+| `ccdd715` | Per-benchmark uncertainty, recovery/cap corrections and preserved GPU traces |
+| `d24f586` | Exact completed-test fallback and linear-scheduler comparison harness        |
+
+Final validation: 206 browser correctness/responsiveness tests, 50 core Node tests,
+and 8 CLI tests pass; TypeScript and lint pass with two existing CLI warnings.
+The user's pre-existing package-version edits are excluded from all commits.

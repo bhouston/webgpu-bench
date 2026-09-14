@@ -2,6 +2,7 @@
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { gunzipSync } from 'node:zlib';
 
 const { values } = parseArgs({
   options: {
@@ -27,17 +28,21 @@ if (values.prepare) {
       'import { runSampling } from "./linear-sampling.js";',
     ),
   );
+  const samplingPath = `${target}/sampling.js`;
+  const sampling = readFileSync(samplingPath, 'utf8');
+  if (!sampling.includes('const realSleep =')) throw new Error('Unexpected sleep implementation');
+  writeFileSync(samplingPath, sampling.replace('const realSleep =', 'export const realSleep ='));
   writeFileSync(
     `${target}/linear-sampling.js`,
     `
-import { recordSample, resolveSamplingConfig } from './sampling.js';
+import { recordSample, resolveSamplingConfig, realSleep } from './sampling.js';
 import { computeStats } from './stats.js';
 // Controlled sequential trial: same calibration, kept-sample rule and sample/idle
 // durations. Two consecutive discards replace cross-kernel thermal consensus.
 // Per-kernel cooldown budgets avoid aborting benchmarks not yet measured.
 export async function runSampling(benchmarks, options = {}) {
   const cfg = resolveSamplingConfig(options);
-  const sleep = options.sleep ?? ((ms) => new Promise((done) => setTimeout(done, ms)));
+  const sleep = options.sleep ?? realSleep;
   const results = new Map();
   let sampled = false;
   for (const b of benchmarks) {
@@ -116,7 +121,9 @@ const median = (numbers) => {
 };
 if (values.report) {
   const reports = values.report.map((file) => {
-    const report = JSON.parse(readFileSync(file, 'utf8'));
+    const report = JSON.parse(
+      file.endsWith('.gz') ? gunzipSync(readFileSync(file)).toString('utf8') : readFileSync(file, 'utf8'),
+    );
     const variants = Object.fromEntries(
       ['reference', 'candidate'].map((variant) => {
         const runs = report.runs.filter((r) => r.variant === variant);

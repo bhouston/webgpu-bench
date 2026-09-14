@@ -56,6 +56,7 @@ test('runs a filtered benchmark as a table', async () => {
   expect(result).toHaveStdout(/^f32-div\s+[\d.]+ [kMGT]?FLOP\/s$/m);
   expect(result).toHaveStderr(/Running 1 benchmark…/);
   expect(result).toHaveStderr(/Estimating runtime…/);
+  expect(result).toHaveStderr(/Completed 0 of 1 benchmarks/);
   expect(result).toHaveStderr(/100%/);
 });
 
