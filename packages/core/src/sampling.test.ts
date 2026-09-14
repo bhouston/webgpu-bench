@@ -3,13 +3,16 @@ import {
   recordSample,
   resolveSamplingConfig,
   roundIsThrottled,
-  runSampling,
+  runSampling as runScheduledSampling,
+  type RunSamplingOptions,
   type Sampleable,
   type SampleState,
 } from './sampling.ts';
 import type { SuiteProgressEvent } from './types.ts';
 
-const cfg = resolveSamplingConfig({ idleMs: 0, cooldownMs: 0, throttleThreshold: 0.1 });
+const cfg = resolveSamplingConfig({ samplingOrder: 'round-robin', idleMs: 0, cooldownMs: 0, throttleThreshold: 0.1 });
+const runSampling = (benchmarks: readonly Sampleable[], options: RunSamplingOptions = {}) =>
+  runScheduledSampling(benchmarks, { samplingOrder: 'round-robin', ...options });
 
 function freshState(id = 'k'): SampleState {
   return { id, timesMs: [], throttledMs: [], bestMs: Number.POSITIVE_INFINITY };
@@ -255,4 +258,68 @@ it('reports wall-time telemetry without charging calibration or idle to samples'
     expect.objectContaining({ durationMs: 25, done: true, timesMs: [10] }),
   ]);
   expect(events[0]).toMatchObject({ type: 'round', sampling: { minRounds: 1, maxRounds: 1, idleMs: 100 } });
+});
+
+it('completes benchmarks in input order by default, calibrating each once and resting between samples', async () => {
+  const log: string[] = [],
+    sleeps: number[] = [];
+  const result = await runScheduledSampling([scripted('a', [10], log), scripted('b', [20], log)], {
+    idleMs: 100,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  expect(log).toEqual([
+    'a:calibrate',
+    'a:sample',
+    'a:sample',
+    'a:sample',
+    'b:calibrate',
+    'b:sample',
+    'b:sample',
+    'b:sample',
+  ]);
+  expect(sleeps).toEqual([100, 100, 100, 100, 100]);
+  expect([...result.values()].every((s) => s.stopReason === 'converged')).toBe(true);
+});
+
+it('cools a sequential kernel after two discards and continues with untouched kernels after its budget expires', async () => {
+  const events: SuiteProgressEvent[] = [],
+    sleeps: number[] = [];
+  const result = await runScheduledSampling([scripted('hot', [10, 15]), scripted('good', [10])], {
+    idleMs: 0,
+    cooldownMs: 3000,
+    maxCooldowns: 1,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
+    onProgress: (e) => events.push(e),
+  });
+  expect(sleeps).toEqual([3000]);
+  expect(result.get('hot')!.stopReason).toBe('throttled');
+  expect(result.get('good')!.stopReason).toBe('converged');
+  expect(result.get('good')!.timesMs).toEqual([10, 10, 10]);
+  expect(events.filter((e) => e.type === 'benchmark-start')).toEqual([
+    { type: 'benchmark-start', id: 'hot' },
+    { type: 'benchmark-start', id: 'good' },
+  ]);
+});
+
+it('shares a finite cooldown budget across sequential benchmarks', async () => {
+  const pauses: number[] = [];
+  const result = await runScheduledSampling(
+    [scripted('hot-a', [10, 15]), scripted('hot-b', [10, 15]), scripted('good', [10])],
+    {
+      maxCooldowns: 1,
+      idleMs: 0,
+      cooldownMs: 3000,
+      sleep: async (ms) => {
+        pauses.push(ms);
+      },
+    },
+  );
+  expect(pauses).toEqual([3000]);
+  expect(result.get('hot-a')!.stopReason).toBe('throttled');
+  expect(result.get('hot-b')!.stopReason).toBe('throttled');
+  expect(result.get('good')!.stopReason).toBe('converged');
 });

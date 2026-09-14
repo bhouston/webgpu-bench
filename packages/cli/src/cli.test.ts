@@ -29,6 +29,7 @@ test('--help lists the options', async () => {
   expect(result).toSucceed();
   expect(result).toHaveStdout(/--filter/);
   expect(result).toHaveStdout(/--no-report/);
+  expect(result).toHaveStdout(/--sampling-order/);
 });
 
 test('--version prints the package version', async () => {
@@ -55,8 +56,7 @@ test('runs a filtered benchmark as a table', async () => {
   expect(result).toHaveStdout(/^Vendor\s+\S/m);
   expect(result).toHaveStdout(/^f32-div\s+[\d.]+ [kMGT]?FLOP\/s$/m);
   expect(result).toHaveStderr(/Running 1 benchmark…/);
-  expect(result).toHaveStderr(/Estimating runtime…/);
-  expect(result).toHaveStderr(/Completed 0 of 1 benchmarks/);
+  expect(result).toHaveStderr(/~[\d.]+s remaining/);
   expect(result).toHaveStderr(/100%/);
 });
 

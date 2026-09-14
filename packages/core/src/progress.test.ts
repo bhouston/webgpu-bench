@@ -3,217 +3,151 @@ import { SuiteProgress } from './progress.ts';
 import { DEFAULT_SAMPLING } from './sampling.ts';
 import type { BenchmarkResult, SuiteProgressEvent } from './types.ts';
 
-const row = { id: 'x', status: 'running' } as BenchmarkResult;
-const sample = (id: string, durationMs: number, count = 1, done = false): SuiteProgressEvent => ({
+const result = (id: string, status: BenchmarkResult['status']) => ({ id, status }) as BenchmarkResult;
+const sample = (id: string, count: number, done = false): SuiteProgressEvent => ({
   type: 'sample',
   id,
-  durationMs,
+  durationMs: 100,
   timesMs: Array.from({ length: count }, () => 10),
   throttledMs: [],
   done,
 });
+const round = (roundNumber: number, ids: string[], overrides = {}): SuiteProgressEvent => ({
+  type: 'round',
+  round: roundNumber,
+  active: ids.length,
+  activeIds: ids,
+  estimatedRemainingUnits: ids.length * 3,
+  sampling: { ...DEFAULT_SAMPLING, ...overrides },
+});
 
-describe('SuiteProgress', () => {
-  test('hides setup and incomplete calibration, and counts samples exactly once', () => {
-    let time = 0;
-    const p = new SuiteProgress(2, () => time);
-    p.onResult(row);
-    p.onResult(row);
+describe('coverage-first SuiteProgress', () => {
+  test('shows a qualified budget estimate immediately, then completes only on finish', () => {
+    const p = new SuiteProgress(10, () => 0);
+    expect(p.displayFraction).toBe(0);
+    expect(p.remainingSeconds).toBeCloseTo(9);
+    expect(p.isApproximate).toBe(true);
+    expect(p.remainingSecondsRange![0]).toBeLessThan(p.remainingSeconds!);
+    expect(p.remainingSecondsRange![1]).toBeGreaterThan(p.remainingSeconds!);
+    p.finish();
+    expect(p.displayFraction).toBe(1);
+    expect(p.remainingSeconds).toBeNull();
+  });
+
+  test('learns whole-benchmark duration without charging preparation to every future benchmark', () => {
+    let t = 0;
+    const p = new SuiteProgress(5, () => t);
+    t = 1000; // upfront preparation
+    p.onProgress({ type: 'benchmark-start', id: 'a' });
+    p.onProgress(round(1, ['a']));
+    t = 1800;
+    p.onProgress(sample('a', 3, true));
+    p.onResult(result('a', 'ok'));
+    p.onResult(result('a', 'ok'));
+    expect(p.completedBenchmarks).toBe(1);
+    expect(p.remainingSeconds).toBeCloseTo(3.2);
+    p.onProgress({ type: 'benchmark-start', id: 'b' });
+    t = 2200;
+    expect(p.remainingSeconds).toBeCloseTo(2.8);
+    expect(p.displayFraction).toBeCloseTo(2.2 / 5);
+  });
+
+  test('honors custom sampling and harness budgets before durations are available', () => {
+    const p = new SuiteProgress(3, () => 0);
+    p.onProgress({
+      ...round(1, ['a'], { minRounds: 2, maxRounds: 2, idleMs: 10 }),
+      sampleBudgetMs: 50,
+      calibrationBudgetMs: 100,
+    } as SuiteProgressEvent);
+    expect(p.remainingSeconds).toBeCloseTo(0.66);
+  });
+
+  test('keeps a countdown during cooldowns and does not train future durations on the cooling pause', () => {
+    let t = 0;
+    const p = new SuiteProgress(3, () => t);
+    p.onProgress({ type: 'benchmark-start', id: 'a' });
+    p.onProgress(round(1, ['a'], { maxCooldowns: 1 }));
+    t = 500;
+    p.onProgress({ type: 'cooldown', attempt: 1, maxAttempts: 1, ms: 3000, throttledIds: ['a'] });
+    const eta = p.remainingSeconds!;
+    expect(eta).toBeGreaterThan(3);
+    expect(p.isApproximate).toBe(true);
+    t += 1000;
+    expect(p.remainingSeconds).toBeCloseTo(eta - 1);
+    t = 3900;
+    p.onProgress(sample('a', 3, true));
+    expect(p.remainingSeconds).toBeCloseTo(1.8); // 900ms useful duration, two future tests
+  });
+
+  test('an overrun does not consume the budgets of later benchmarks or stick at zero', () => {
+    let t = 0;
+    const p = new SuiteProgress(4, () => t);
+    for (const id of ['a', 'b']) {
+      p.onProgress({ type: 'benchmark-start', id });
+      p.onProgress(round(1, [id]));
+      t += 1000;
+      p.onProgress(sample(id, 3, true));
+    }
+    p.onProgress({ type: 'benchmark-start', id: 'c' });
+    t += 10_000;
+    expect(p.remainingSeconds).toBeGreaterThan(1);
+    expect(p.displayFraction).toBeLessThan(1);
+    expect(p.isApproximate).toBe(true);
+  });
+
+  test('unbounded visibility pauses hide time estimates and resume on activity', () => {
+    const p = new SuiteProgress(2, () => 0);
+    p.onProgress({ type: 'pause' });
     expect(p.displayFraction).toBeNull();
     expect(p.remainingSeconds).toBeNull();
-    expect(p.completedUnits).toBe(0);
-    p.onProgress({
-      type: 'round',
-      round: 1,
-      active: 2,
-      activeIds: ['a', 'b'],
-      sampling: { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6 },
-      estimatedRemainingUnits: 10,
-    });
-    time = 1000;
-    p.onProgress(sample('a', 100));
-    expect(p.displayFraction).toBeNull();
-    time = 2000;
-    p.onProgress(sample('b', 100));
-    p.onResult(row);
-    expect(p.completedUnits).toBe(2);
-    expect(p.displayFraction).toBeNull(); // need repeated timing evidence
-    p.onProgress({
-      type: 'round',
-      round: 2,
-      active: 2,
-      activeIds: ['a', 'b'],
-      sampling: { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6 },
-      estimatedRemainingUnits: 10,
-    });
-    time = 2100;
-    p.onProgress(sample('a', 100, 2));
-    time = 2300;
-    p.onProgress(sample('b', 100, 2));
-    // Calibration contributes to elapsed time, never to future sample cost.
-    expect(p.remainingSeconds).toBeCloseTo(1.2);
-    expect(p.displayFraction).toBeCloseTo(2.3 / 3.5);
-    // A numeric percentage and ETA can be withdrawn after they have been shown.
-    p.onProgress({ type: 'cooldown', attempt: 1, maxAttempts: 3, ms: 3000, throttledIds: ['a', 'b'] });
+    p.onProgress({ type: 'benchmark-start', id: 'a' });
+    expect(p.remainingSeconds).not.toBeNull();
+  });
+
+  test('skipped and failed setup rows remove work without training a zero-duration benchmark', () => {
+    const p = new SuiteProgress(3, () => 0);
+    p.onResult(result('a', 'skipped'));
+    p.onResult(result('b', 'error'));
+    expect(p.remainingSeconds).toBeCloseTo(0.9);
+    expect(p.completedBenchmarks).toBe(2);
+    expect(p.benchmarkCount).toBe(3);
+    p.onResult(result('c', 'ok'));
+    expect(p.remainingSeconds).toBe(0);
+    expect(p.displayFraction).toBeLessThan(1);
+    p.finish();
+    expect(p.displayFraction).toBe(1);
+  });
+
+  test('empty suites have no fabricated estimate', () => {
+    const p = new SuiteProgress(0);
     expect(p.displayFraction).toBeNull();
     expect(p.remainingSeconds).toBeNull();
     p.finish();
     expect(p.fraction).toBe(1);
-    expect(p.displayFraction).toBe(1);
-    expect(p.remainingSeconds).toBeNull();
   });
 
-  test('empty and all-skipped suites become complete only at finish', () => {
-    const p = new SuiteProgress(0);
-    expect(p.displayFraction).toBeNull();
-    p.finish();
-    expect(p.displayFraction).toBe(1);
+  test('round-robin also estimates unseen calibration and work instead of waiting for two full rounds', () => {
+    let t = 0;
+    const p = new SuiteProgress(10, () => t);
+    p.onProgress(
+      round(
+        1,
+        Array.from({ length: 10 }, (_, i) => `k${i}`),
+        { samplingOrder: 'round-robin' },
+      ),
+    );
+    t = 400;
+    p.onProgress(sample('k0', 1));
+    expect(p.remainingSeconds).toBeGreaterThan(5);
+    expect(p.displayFraction).not.toBeNull();
+    expect(p.isApproximate).toBe(true);
   });
 
-  test('legacy event streams remain indeterminate without duration evidence', () => {
-    const p = new SuiteProgress(1);
-    p.onProgress({ type: 'round', round: 1, active: 1, estimatedRemainingUnits: 5 });
-    for (let i = 0; i < 10; i++) p.onResult(row);
-    expect(p.displayFraction).toBeNull();
-    expect(p.remainingSeconds).toBeNull();
+  test.each([0, NaN, Infinity])('invalid duration %s cannot turn an estimate into NaN', (durationMs) => {
+    const p = new SuiteProgress(3, () => 100);
+    p.onProgress(round(1, ['a', 'b', 'c'], { samplingOrder: 'round-robin' }));
+    p.onProgress({ ...sample('a', 1), durationMs } as SuiteProgressEvent);
+    expect(Number.isFinite(p.remainingSeconds)).toBe(true);
+    expect(Number.isFinite(p.displayFraction)).toBe(true);
   });
-});
-
-function fixedRun() {
-  let time = 0;
-  const p = new SuiteProgress(1, () => time);
-  const round = (n: number) =>
-    p.onProgress({
-      type: 'round',
-      round: n,
-      active: 1,
-      activeIds: ['a'],
-      estimatedRemainingUnits: 7 - n,
-      sampling: { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6, idleMs: 0 },
-    });
-  round(1);
-  time = 1000;
-  p.onProgress(sample('a', 100));
-  round(2);
-  time = 1100;
-  p.onProgress(sample('a', 100, 2));
-  return {
-    p,
-    round,
-    setTime: (t: number) => {
-      time = t;
-    },
-  };
-}
-
-test('expires a previously visible estimate while a dispatch is stalled', () => {
-  const { p, round, setTime } = fixedRun();
-  expect(p.displayFraction).not.toBeNull();
-  expect(p.remainingSeconds).toBeCloseTo(0.4);
-  round(3);
-  setTime(1400);
-  expect(p.displayFraction).toBeNull();
-  expect(p.remainingSeconds).toBeNull();
-});
-
-test.each(['pause', 'throttle-abort'] as const)('withdraws estimates on %s', (type) => {
-  const { p } = fixedRun();
-  expect(p.displayFraction).not.toBeNull();
-  p.onProgress(type === 'pause' ? { type } : { type, throttledIds: ['a'] });
-  expect(p.displayFraction).toBeNull();
-  expect(p.remainingSeconds).toBeNull();
-});
-
-test('withdraws on a discarded sample and can recover with subsequent evidence', () => {
-  const { p, round, setTime } = fixedRun();
-  round(3);
-  setTime(1200);
-  p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10], throttledMs: [15], done: false });
-  expect(p.displayFraction).toBeNull();
-  round(4);
-  setTime(1300);
-  p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10, 10], throttledMs: [15], done: false });
-  expect(p.displayFraction).toBeNull();
-  round(5);
-  setTime(1400);
-  p.onProgress({ type: 'sample', id: 'a', durationMs: 100, timesMs: [10, 10, 10, 10], throttledMs: [15], done: false });
-  expect(p.displayFraction).toBeNull();
-  round(6);
-  setTime(1500);
-  p.onProgress({
-    type: 'sample',
-    id: 'a',
-    durationMs: 100,
-    timesMs: [10, 10, 10, 10, 10],
-    throttledMs: [15],
-    done: false,
-  });
-  expect(p.displayFraction).not.toBeNull();
-});
-
-test.each([0, Number.NaN, Infinity, 300])('rejects missing or surprising duration %s', (duration) => {
-  const { p, round, setTime } = fixedRun();
-  round(3);
-  setTime(1400);
-  p.onProgress(sample('a', duration, 3));
-  expect(p.displayFraction).toBeNull();
-  expect(p.remainingSeconds).toBeNull();
-});
-
-test('can show a useful late percentage while withholding an uncertain ETA', () => {
-  let time = 0;
-  const p = new SuiteProgress(1, () => time);
-  for (let n = 1; n <= 2; n++) {
-    p.onProgress({
-      type: 'round',
-      round: n,
-      active: 1,
-      activeIds: ['a'],
-      sampling: DEFAULT_SAMPLING,
-      estimatedRemainingUnits: 6 - n,
-    });
-    time += 1000;
-    p.onProgress(sample('a', 100, n));
-  }
-  expect(p.displayFraction).toBeGreaterThan(0.9);
-  expect(p.remainingSeconds).toBeNull();
-  expect(p.displayFraction).toBeLessThan(1);
-});
-
-test('one cheap noisy kernel does not invalidate a well-constrained larger suite', () => {
-  let time = 0;
-  const p = new SuiteProgress(10, () => time);
-  const ids = Array.from({ length: 10 }, (_, i) => `k${i}`);
-  const cfg = { ...DEFAULT_SAMPLING, minRounds: 6, maxRounds: 6, idleMs: 0 };
-  for (let n = 1; n <= 2; n++) {
-    p.onProgress({ type: 'round', round: n, active: 10, activeIds: ids, sampling: cfg, estimatedRemainingUnits: 60 });
-    for (const id of ids) {
-      const duration = id === 'k0' ? 1 : 100;
-      time += duration + (n === 1 ? 100 : 0);
-      p.onProgress(sample(id, duration, n));
-    }
-  }
-  expect(p.displayFraction).not.toBeNull();
-  p.onProgress({ type: 'round', round: 3, active: 10, activeIds: ids, sampling: cfg, estimatedRemainingUnits: 40 });
-  time++;
-  p.onProgress({ type: 'sample', id: 'k0', durationMs: 1, timesMs: [10, 10], throttledMs: [15], done: false });
-  expect(p.displayFraction).not.toBeNull();
-});
-
-test('completed benchmark count is exact while runtime is unknown and deduplicates terminal rows', () => {
-  const p = new SuiteProgress(3);
-  const result = (id: string, status: BenchmarkResult['status']) => ({ ...row, id, status });
-  p.onResult(result('a', 'running'));
-  expect(p.completedBenchmarks).toBe(0);
-  p.onResult(result('a', 'ok'));
-  p.onResult(result('a', 'ok'));
-  p.onResult(result('b', 'skipped'));
-  expect(p.completedBenchmarks).toBe(2);
-  expect(p.benchmarkCount).toBe(3);
-  expect(p.displayFraction).toBeNull();
-  p.onResult(result('c', 'error'));
-  expect(p.completedBenchmarks).toBe(3);
-  expect(p.displayFraction).toBeNull();
-  p.finish();
-  expect(p.displayFraction).toBe(1);
 });

@@ -2,7 +2,19 @@
 
 Baseline: `2231170`. Existing package-version edits are unrelated and excluded from commits.
 
-## Goal and measurements
+## Current decision: coverage is a product requirement
+
+The strict-gating decision below was the wrong tradeoff: it hid the ETA for most
+of the run. The revised target is **at least 90% ETA visibility**, while improving
+accuracy and marking uncertain predictions as approximate. The latest implementation
+uses sequential sampling by default and continuously refines an early timing budget
+from completed benchmarks. It achieved **100% ETA coverage** in six captured GPU
+runs, with **79.51%** of displayed ETA time within 20% of actual remaining time
+(Chromium 95.06%, WebKit 67.86%). These are local observations, not a guarantee.
+The revision at the end records the experiments and limitations. Earlier decisions
+to retain round-robin as the default and hide uncertain estimates are superseded.
+
+## Original goal and measurements
 
 Show a numeric estimate only when there is evidence it is within roughly 20%.
 Evaluate percentage against **elapsed wall time / final wall time**, rather than
@@ -336,11 +348,11 @@ node scripts/progress-experiment.mjs --capture chromium --seed 401 \
   --repeats 1 --groups representative,fixed \
   --traces /tmp/progress-new-traces.json --output /tmp/progress-new.json
 
-# Prepare an isolated linear scheduler using the current compiled kernels.
+# Reproduce the historical per-kernel-cooldown variant (not the current default).
 node scripts/linear-progress-experiment.mjs --prepare /tmp/progress-linear-dist
 node scripts/profile-suite.mjs --browser webkit \
   --candidate-root /tmp/progress-linear-dist \
-  --candidate '{"maxRounds":10}' --reference-options '{"maxRounds":10}' \
+  --candidate '{"maxRounds":10}' --reference-options '{"maxRounds":10,"samplingOrder":"round-robin"}' \
   --repeats 2 --output /tmp/progress-linear-profile.json
 
 # Summarize the preserved full-catalog comparisons without running the GPU.
@@ -351,8 +363,10 @@ node scripts/linear-progress-experiment.mjs \
 ```
 
 The replay reports both raw API estimates and TTY-style displayed estimates
-(whole percentages, one-decimal ETAs of at least one second, event updates plus a
-100 ms refresh). Non-TTY logs are historical snapshots rather than a continuously
+(whole percentages, one-decimal ETAs, event updates plus a
+100 ms refresh). The revised display renders immediately and retains subsecond
+ETAs with a 0.1-second display floor; historical strict-gate results above used
+a one-second cutoff. Non-TTY logs are historical snapshots rather than a continuously
 visible estimate. Coverage integrates time between events; the completion instant
 itself is excluded. The synthetic and captured GPU workloads are complementary,
 not a claim about how often real users encounter each kind of noise.
@@ -371,3 +385,89 @@ not a claim about how often real users encounter each kind of noise.
 Final validation: 206 browser correctness/responsiveness tests, 50 core Node tests,
 and 8 CLI tests pass; TypeScript and lint pass with two existing CLI warnings.
 The user's pre-existing package-version edits are excluded from all commits.
+
+## Revision: visible estimates and sequential execution
+
+The user correctly rejected the original outcome. Optimizing conditional accuracy
+while allowing nearly all estimates to disappear did not meet the product need.
+Coverage is now a primary requirement. Uncertain estimates carry `~`; only an
+unbounded pause (for example, a hidden page) suppresses the ETA. Completion is
+shown only when the suite finishes. Exact completed-test counts remain available.
+
+### Trials and retained design
+
+1. **Relax the round-robin confidence gate.** Supply budgets for unobserved
+   calibration/samples and keep estimates through finite cooldowns. This recovered
+   visibility but left the changing mix of active kernels difficult to predict.
+   Retain this as support for callers explicitly selecting round-robin.
+2. **Complete tests sequentially and learn whole-test durations.** Start with
+   calibration, sampling and idle budgets, then use completed benchmark durations
+   to estimate unfinished tests. Deduct the current test's elapsed work without
+   consuming future tests' budgets. This yields early completed results and a
+   simpler forecast. Retained as the default, with `samplingOrder: 'round-robin'`
+   and CLI `--sampling-order round-robin` for comparisons.
+3. **Reject per-test cooldown budgets.** The initial native sequential WebKit
+   trial ran the full catalog in 107.63 seconds; ETA coverage was 99.84%, but only
+   20.40% of displayed ETA time was within 20%. Repeated cooldowns defeated the
+   work-only predictor. Restore a suite-wide budget (three pauses by default),
+   retire the affected noisy benchmark on exhaustion, and continue untouched
+   benchmarks. Learn observed cooling overhead separately from work, bounded by
+   the remaining cooldown budget. The next full-catalog WebKit run took 77.33
+   seconds. These are separate runs, not a controlled estimate of speedup.
+4. **Fix display coverage itself.** Render immediately, refresh every 100 ms,
+   and show decimal ETAs below one second. A minimum display value of 0.1 seconds
+   avoids saying zero while work is still active. Overrunning tests widen the
+   uncertainty range and keep a positive residual work estimate.
+
+The scheduler retains calibration, best-of-N stopping, sample caps, idle gaps,
+hidden-page sample rejection and error reporting. Sequential thermal detection
+uses two consecutive discarded measurements instead of cross-kernel agreement.
+This can change benchmark scores and their thermal exposure; the prior comparison
+results above do not establish score equivalence. The scheduling option allows
+continued investigation without blocking the improved default experience.
+
+### Final measurements
+
+Fresh native sequential captures on this Apple M3: representative 11-test subset,
+fixed six-sample subset, and the full 71-test catalog in each browser. Chromium
+captures used the initial native scheduler; none required cooldowns, so the later
+suite-budget correction does not alter their execution. WebKit captures used the
+final shared-budget scheduler. All six were replayed through the final estimator
+and actual TTY rounding/refresh rules; no future events inform predictions.
+
+| Workload                      | ETA coverage | ETA within 20% | Mean relative ETA error | Percentage within 20% |
+| ----------------------------- | -----------: | -------------: | ----------------------: | --------------------: |
+| Chromium, 3 runs              |         100% |         95.06% |                   8.92% |                95.73% |
+| WebKit, 3 runs                |         100% |         67.86% |                  26.45% |                87.82% |
+| Combined, weighted by runtime |         100% |         79.51% |                  18.95% |                91.21% |
+| Synthetic stress, 144 runs    |         100% |         50.15% |                  57.54% |                73.64% |
+
+Percentage coverage is also 100%. Accuracy measures still use relative error,
+including the difficult final seconds; no relaxed tolerance is substituted.
+The coverage target is met on these runs. Chromium also meets the desired timing
+accuracy for most of the run; noisy WebKit and adversarial synthetic workloads
+remain less predictable. Approximate estimates improve continuity but do not
+make those predictions reliable to within 20%. Broader hardware and repeated
+held-out trials are needed before making a general accuracy claim.
+
+The frozen baseline output on these **sequential** traces is only a diagnostic:
+it is not a valid old-scheduler before/after comparison. Earlier round-robin
+measurements remain in this report and their original fixtures.
+
+Reproduce the final six-run measurements without GPU execution:
+
+```sh
+pnpm --filter webgpu-bench-core build
+node scripts/progress-experiment.mjs \
+  --input scripts/fixtures/coverage-sequential-traces.json.gz \
+  --output /tmp/progress-coverage-final.json
+```
+
+The six raw traces are committed in that fixture; the synthetic set is seeded
+and reproducible with the command above. Tests cover early budgets, learning,
+finite cooldown countdowns, late overruns, pause/resume, errors/skips, round-robin
+fallback, sequential completion order and the shared cooldown cap.
+
+Final revision validation: **206 browser tests, 51 core Node tests and 8 CLI tests
+pass**. TypeScript passes; lint has only the two existing CLI function-scoping
+warnings. Existing package-version edits remain excluded from the commit.

@@ -21,7 +21,7 @@ Want to run the suite from the command line instead of a browser? See
 
 ## Usage
 
-`runSuite` (in `suite.ts`) is a scheduler: it round-robins the given benchmarks, times them, watches for
+`runSuite` (in `suite.ts`) is a scheduler: it completes benchmarks in catalog order by default, times them, watches for
 thermal throttling, and yields result rows. `BENCHMARKS` (in `catalog.ts`) is this package's own set of
 definitions and the default; pass your own `BenchmarkDefinition`s, a filtered subset, or a mix:
 
@@ -56,7 +56,7 @@ shared metric defs, and `generateMatVecData` for writing your own `prepare()`.
 const progress = new SuiteProgress(benchmarks.length);
 for await (const result of runSuite({ benchmarks, onProgress: progress.onProgress })) {
   progress.onResult(result);
-  // null means an indeterminate bar/status, with no numeric percentage.
+  // Qualify early estimates with progress.isApproximate; null indicates a pause.
   renderProgress(progress.displayFraction, progress.remainingSeconds);
 }
 progress.finish();
@@ -64,19 +64,25 @@ renderProgress(progress.displayFraction, progress.remainingSeconds);
 ```
 
 Import `SuiteProgress` from `webgpu-bench-core`. Poll the getters periodically as
-well as after events: a long dispatch can make an earlier estimate unreliable.
-`completedBenchmarks` and `benchmarkCount` provide an exact count that can always
-be shown, including while the runtime estimate is indeterminate. Percentage and ETA are independently gated to an empirical roughly-20% error
-envelope, after calibration and repeated timing observations. Cooldowns, hidden
-pages, discarded samples and timing changes can withdraw an estimate. This is
-an estimate of wall-time completion, not a count of completed benchmarks, and it
-can move backward when remaining work changes. Only `finish()` returns 100%.
-`remainingSeconds` is unrounded; format it to suitable precision. The legacy
-numeric `fraction` getter returns zero while indeterminate and is deprecated for
-display; migrate to `displayFraction` to avoid showing a misleading `0%`.
-Older schedulers without duration telemetry stay indeterminate until `finish()`.
-See [the experiment report](../../progress-estimation-study.md) for accuracy,
-coverage, and limitations of the empirical gate.
+well as after events to update the countdown between results. The initial estimate
+uses the sampling/calibration budget and is marked approximate (`isApproximate`).
+Each completed benchmark refines the average duration of the remaining work.
+Render approximate estimates with `~`; `remainingSecondsRange` also exposes an
+empirical uncertainty range. Insufficient confidence no longer hides the estimate.
+
+The countdown includes scheduled cooldowns and reserves time for unstarted
+benchmarks if the current one overruns. Unbounded pauses, such as a hidden browser
+tab, still return `null`. Only `finish()` returns 100%. `completedBenchmarks` and
+`benchmarkCount` provide an exact work count independent of the time estimate.
+`remainingSeconds` is unrounded and remains available below one second.
+
+Set `samplingOrder: 'round-robin'` to retain interleaved measurement for comparison.
+Its progress model learns from observed samples and estimates unseen work from
+budget/timing observations instead of waiting for complete rounds. Scheduling
+order can affect calibration, timing-method selection and thermal behavior; it
+is not a claim of identical scores across orders. See the
+[experiment report](../../progress-estimation-study.md) for measured coverage,
+accuracy, and limitations.
 
 ## What's measured
 
@@ -149,17 +155,18 @@ performance changes.
 
 ## Sampling methodology
 
-Benchmarks run round-robin, not one-after-another, to avoid thermal throttling from skewing later
-results. Per benchmark, the suite:
+Benchmarks run one at a time in catalog order, producing final results throughout
+the run. `samplingOrder: 'round-robin'` retains interleaved sampling for comparisons.
 
 1. Prepares all kernels up front, so unsupported ones resolve as `skipped` immediately.
 2. Calibrates per-dispatch work for kernels with a work knob toward `targetDispatchMs` (10ms); fixed-work
    comparisons keep their logical problem unchanged and calibrate only the number of batched repetitions.
-3. Takes short (~100ms) timed measurements in random order, with an idle gap between them.
+3. Takes short (~100ms) timed measurements with an idle gap between them.
 4. Reports the best (fastest) run — noise only ever slows a measurement down, never speeds it up.
 5. Converges once the best stops improving (`minRounds`/`stableRounds`), up to a `maxRounds` cap.
 6. Discards runs >20% slower than the current best as thermal noise (`throttledMs`, not `stats`).
-7. Pauses and retries if the device is broadly throttled; gives up after `maxCooldowns` and flags the row.
+7. Pauses after two consecutive discards in sequential mode; after the suite-wide `maxCooldowns` budget, flags that row and continues.
+   Round-robin mode instead uses cross-kernel agreement and a suite-wide cooldown budget.
 
 All of the above are tunable via `SuiteOptions`. Timing prefers GPU `timestamp-query` and falls back to
 wall-clock, cross-checking one against the other every measurement (Safari's timestamps are unreliable

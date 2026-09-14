@@ -83,6 +83,11 @@ export const command = defineCommand({
         default: true,
         describe: `Submit results to ${SITE} (--no-report to keep them local)`,
       })
+      .option('sampling-order', {
+        choices: ['sequential', 'round-robin'] as const,
+        default: 'sequential' as const,
+        describe: 'Complete benchmarks in order or interleave them for comparison',
+      })
       .option('json', { type: 'boolean', default: false, describe: 'Print results as JSON instead of a table' })
       .option('api-host', { type: 'string', default: 'https://api.web3dsurvey.com', hidden: true }),
   handler: async (argv) => {
@@ -105,19 +110,19 @@ export const command = defineCommand({
     let lastBucket: number | null = null;
     let lastVisible = false;
     let lastCompleted = -1;
-    let renderEnabled = false;
     const tty = process.stderr.isTTY;
     const bar = (fraction: number) => {
       const filled = Math.round(fraction * BAR_WIDTH);
       return `[${chalk.green('█'.repeat(filled))}${chalk.dim('░'.repeat(BAR_WIDTH - filled))}]`;
     };
     const onDeviceInfo = (i: DeviceInfo) => {
+      if (tty && lastLine) process.stderr.write('\r\x1b[K');
+      lastLine = '';
       info = i;
       if (!argv.json) console.log(`${formatDeviceInfo(i)}\n`);
       console.error(`Running ${benchmarks.length} benchmark${benchmarks.length === 1 ? '' : 's'}…`);
     };
     const renderProgress = () => {
-      if (!renderEnabled) return;
       const fraction = progress.displayFraction;
       const visible = fraction !== null;
       const percent = fraction === null ? null : Math.floor(fraction * 100);
@@ -127,7 +132,7 @@ export const command = defineCommand({
       const line =
         fraction === null
           ? `Completed ${progress.completedBenchmarks} of ${progress.benchmarkCount} benchmarks · Estimating runtime…`
-          : `${bar(fraction)} ${String(percent).padStart(3)}%${eta !== null && eta >= 1 ? ` (${eta.toFixed(1)}s remaining)` : ''}`;
+          : `${bar(fraction)} ${String(percent).padStart(3)}%${eta !== null ? ` (${progress.isApproximate ? '~' : ''}${Math.max(0.1, eta).toFixed(1)}s remaining)` : ''}`;
       if (
         line !== lastLine &&
         (tty ||
@@ -145,15 +150,15 @@ export const command = defineCommand({
     };
     const onProgress: typeof progress.onProgress = (event) => {
       progress.onProgress(event);
-      renderProgress(); // Immediately clear a stale estimate on cooldown/pause.
+      renderProgress(); // Reflect cooldowns immediately; hide only unbounded pauses.
     };
-    // Recheck confidence during long dispatches or pauses, even without new rows.
+    // Refresh the countdown during dispatches, calibration and cooldowns.
+    renderProgress();
     const timer = setInterval(renderProgress, 100);
     try {
-      for await (const r of runSuite({ benchmarks, onDeviceInfo, onProgress })) {
+      for await (const r of runSuite({ benchmarks, samplingOrder: argv.samplingOrder, onDeviceInfo, onProgress })) {
         results.set(r.id, r);
         progress.onResult(r);
-        renderEnabled = true;
         renderProgress();
       }
       progress.finish();

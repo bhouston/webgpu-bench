@@ -87,17 +87,20 @@ export interface BenchmarkResult {
   timingMethod: TimingMethod;
 }
 
-/** Suite-level progress events (round boundaries and thermal cooldown pauses). */
+/** Scheduler activity and timing hints for shared progress displays. */
 export type SuiteProgressEvent =
+  | { type: 'benchmark-start'; id: string }
   | {
       type: 'round';
       round: number;
       active: number;
-      /** Legacy unit estimate; prefer SuiteProgress's confidence-gated display getters. */
+      /** Legacy unit estimate; prefer SuiteProgress's wall-time display getters. */
       estimatedRemainingUnits: number;
       /** Ordered work and effective settings, provided by current schedulers. */
       activeIds?: string[];
       sampling?: Required<SamplingConfig>;
+      sampleBudgetMs?: number;
+      calibrationBudgetMs?: number;
     }
   | {
       type: 'sample';
@@ -113,6 +116,8 @@ export type SuiteProgressEvent =
   | { type: 'throttle-abort'; throttledIds: string[] };
 
 export interface SuiteOptions {
+  /** Complete each benchmark in catalog order by default; opt into interleaving for comparisons. */
+  samplingOrder?: 'sequential' | 'round-robin';
   /**
    * Which benchmarks to run — this package's own `BENCHMARKS` by default.
    * Pass a filtered subset, your own `BenchmarkDefinition`s, or a mix of
@@ -163,10 +168,10 @@ export interface SuiteOptions {
   idleMs?: number;
   /** How long the whole suite pauses when it detects throttling, in ms. Default 3000. */
   cooldownMs?: number;
-  /** How many cooldown pauses to attempt before giving up and reporting the still-unconverged benchmarks as `throttled`. Default 3. */
+  /** Suite-wide cooldown budget. Once exhausted, sequential mode flags noisy kernels and continues with later ones. Default 3. */
   maxCooldowns?: number;
   /**
-   * Suite-wide throttle trigger: a cooldown starts when at least this
+   * Round-robin only. Suite-wide throttle trigger: a cooldown starts when at least this
    * fraction (and at least two) of the benchmarks measured in a round come
    * back throttled. Default 0.5.
    */
@@ -182,7 +187,7 @@ export interface SuiteOptions {
   computeIterations?: number;
   /** Called once with the resolved GPU device/adapter info before benchmarks start. */
   onDeviceInfo?: (info: DeviceInfo) => void;
-  /** Called at round boundaries and when the suite pauses for a thermal cooldown. */
+  /** Called on benchmark starts, samples, round boundaries and pauses. */
   onProgress?: (event: SuiteProgressEvent) => void;
 }
 

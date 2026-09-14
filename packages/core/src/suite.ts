@@ -54,8 +54,8 @@ interface ScheduledKernel {
  * definitions, mix them with the built-ins, or run a filtered subset of
  * `BENCHMARKS` — the scheduling below doesn't change.
  *
- * Measurements are scheduled round-robin across all benchmarks with idle
- * gaps and thermal cooldowns (see `runSampling`), and the reported number
+ * Benchmarks complete in catalog order by default, with idle gaps and thermal
+ * cooldowns (see `runSampling`). Optional round-robin mode interleaves them. The reported number
  * for each benchmark is its *best* run — so a phone that throttles partway
  * through the suite still reports what it can do rather than what it was
  * doing while hot.
@@ -107,7 +107,7 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
     yield rowFromMeta(prepared.meta);
   }
 
-  // Phase 2: sample everything round-robin. `runSampling` pushes updates
+  // Phase 2: sample in the selected order. `runSampling` pushes updates
   // through a callback; bridge them into this generator via a queue.
   const byId = new Map(scheduled.map((k) => [k.meta.id, k]));
   const queue: BenchmarkResult[] = [];
@@ -159,6 +159,9 @@ export async function* runSuite(options: SuiteOptions = {}): AsyncGenerator<Benc
 
 function pickSamplingOptions(o: SuiteOptions) {
   return {
+    samplingOrder: o.samplingOrder,
+    targetMs: o.targetMs,
+    warmups: o.warmups,
     minRounds: o.minRounds,
     maxRounds: o.maxRounds,
     stableRounds: o.stableRounds,

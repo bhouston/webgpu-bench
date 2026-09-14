@@ -1,8 +1,10 @@
 import { computeStats, isBestStable, isThrottled } from './stats.ts';
 import type { SamplingStopReason, Stats, SuiteProgressEvent } from './types.ts';
 
-/** Knobs for the round-robin, best-of-N sampling scheduler. */
+/** Knobs for the best-of-N sampling scheduler. */
 export interface SamplingConfig {
+  /** Complete kernels in catalog order (default), or interleave them for comparisons. */
+  samplingOrder?: 'sequential' | 'round-robin';
   /** Fewest kept measurements per benchmark before it can converge. Default 3. */
   minRounds?: number;
   /** Most kept measurements per benchmark. Default 10. */
@@ -17,13 +19,14 @@ export interface SamplingConfig {
   idleMs?: number;
   /** Suite-wide pause when throttling is detected, in ms. Default 3000. */
   cooldownMs?: number;
-  /** Cooldown pauses before giving up on still-unconverged benchmarks. Default 3. */
+  /** Suite-wide cooldown budget. Default 3. */
   maxCooldowns?: number;
-  /** Fraction of a round's measurements (and at least two) that must be throttled to trigger a cooldown. Default 0.5. */
+  /** Round-robin only: throttled fraction (and at least two kernels) that triggers cooldown. Default 0.5. */
   throttledFraction?: number;
 }
 
 export const DEFAULT_SAMPLING: Required<SamplingConfig> = {
+  samplingOrder: 'sequential',
   minRounds: 3,
   maxRounds: 10,
   stableRounds: 2,
@@ -63,6 +66,9 @@ export interface SampleStateSnapshot extends SampleState {
 }
 
 export interface RunSamplingOptions extends SamplingConfig {
+  /** Timing budget hints for the early progress estimate; not used to time GPU work. */
+  targetMs?: number;
+  warmups?: number;
   /** Called after every measurement (and when a benchmark is retired) with that benchmark's state. */
   onUpdate?: (state: SampleStateSnapshot) => void | Promise<void>;
   onProgress?: (event: SuiteProgressEvent) => void;
@@ -190,23 +196,15 @@ function snapshot(state: SampleState): SampleStateSnapshot {
 }
 
 /**
- * Round-robin, best-of-N sampling across many benchmarks.
+ * Adaptive best-of-N sampling. Sequential mode completes each benchmark in
+ * input order, with an idle gap between samples and cooldown after two
+ * consecutive discards. The cooldown budget is shared by the suite; exhaustion
+ * retires the noisy benchmark and continues with untouched ones.
  *
- * Rather than running each benchmark to convergence before starting the
- * next (which heats a phone up in seconds and leaves every later benchmark
- * measuring a throttled GPU), every round takes one short measurement of
- * every still-active benchmark, with an idle gap between measurements so
- * the GPU duty-cycles. Benchmarks retire as soon as their best run has
- * stopped improving (`isBestStable`). Measurements that come in well slower
- * than a benchmark's best are discarded as throttled; when a round shows
- * the device throttled overall — half the benchmarks slow, or any one slow
- * twice running — the whole suite pauses for `cooldownMs` and tries again,
- * up to `maxCooldowns` times, after which whatever is still unconverged is
- * reported with `stopReason: 'throttled'` alongside its best run so far.
- *
- * Only the best run is the headline number: every noise source makes runs
- * slower, never faster, so the minimum is the most robust estimate of what
- * the device can do.
+ * Optional round-robin mode shuffles active benchmarks each round and uses
+ * cross-kernel agreement to trigger suite-wide cooldowns. Both modes preserve
+ * calibration, minimum/maximum kept samples, best-stability stopping and the
+ * discarded-attempt cap. Hidden-page measurements are dropped in either mode.
  */
 export async function runSampling(
   benchmarks: readonly Sampleable[],
@@ -226,13 +224,23 @@ export async function runSampling(
   }
   const visibility = visibilityGuard(() => onProgress({ type: 'pause' }));
   let cooldowns = 0;
-  let calibrated = false;
+  const calibrated = new Set<string>();
+  const sequential = cfg.samplingOrder === 'sequential';
+  let currentId: string | undefined;
+  let sampled = false;
+  let consecutiveDiscards = 0;
   try {
     for (let round = 1; ; round++) {
-      // Fresh order every round: a fixed order would hand the same kernels
-      // the cool GPU every time and leave the rest measuring a warm one.
-      const active = shuffle([...states.values()].filter(isActive));
+      // Sequential mode gives early final results; round-robin randomizes
+      // exposure to device temperature and remains available for comparisons.
+      const pending = [...states.values()].filter(isActive);
+      const active = sequential ? pending.slice(0, 1) : shuffle(pending);
       if (active.length === 0) break;
+      if (sequential && currentId !== active[0]!.id) {
+        currentId = active[0]!.id;
+        consecutiveDiscards = 0;
+        onProgress({ type: 'benchmark-start', id: currentId });
+      }
       // Typical remaining measurements per still-active benchmark: assumes it
       // converges around minRounds + stableRounds, like any other. Floored at
       // 1 so a benchmark that's run longer than typical still counts as
@@ -248,6 +256,8 @@ export async function runSampling(
         estimatedRemainingUnits,
         activeIds: active.map((s) => s.id),
         sampling: cfg,
+        sampleBudgetMs: options.targetMs ?? 100,
+        calibrationBudgetMs: (options.targetMs ?? 100) * (2 + (options.warmups ?? 1)),
       });
 
       const roundStates: SampleState[] = [];
@@ -257,11 +267,20 @@ export async function runSampling(
         const sampler = samplers.get(state.id)!;
         let durationMs = 0;
         try {
-          if (!first && cfg.idleMs > 0) await sleep(cfg.idleMs);
+          if (sequential && !calibrated.has(state.id)) {
+            await visibility.waitVisible();
+            await sampler.calibrate();
+            calibrated.add(state.id);
+          }
+          if ((!first || (sequential && sampled)) && cfg.idleMs > 0) await sleep(cfg.idleMs);
           first = false;
           await visibility.waitVisible();
           visibility.mark();
-          if (!calibrated) await sampler.calibrate();
+          if (!calibrated.has(state.id)) {
+            await sampler.calibrate();
+            calibrated.add(state.id);
+          }
+          sampled = true;
           const sampleStart = now();
           const ms = await sampler.sample();
           durationMs = now() - sampleStart;
@@ -273,6 +292,7 @@ export async function runSampling(
             );
           }
           const kept = recordSample(state, ms, cfg);
+          if (sequential) consecutiveDiscards = kept ? 0 : consecutiveDiscards + 1;
           roundStates.push(state);
           roundThrottled.push(!kept);
         } catch (error) {
@@ -288,13 +308,15 @@ export async function runSampling(
         });
         await onUpdate(snapshot(state));
       }
-      calibrated = true;
 
-      if (roundStates.length > 0 && roundIsThrottled(roundThrottled, cfg)) {
+      if (
+        roundStates.length > 0 &&
+        (sequential ? consecutiveDiscards >= 2 && isActive(active[0]!) : roundIsThrottled(roundThrottled, cfg))
+      ) {
         const throttledIds = roundStates.filter((_, i) => roundThrottled[i]).map((s) => s.id);
         if (cooldowns >= cfg.maxCooldowns) {
           onProgress({ type: 'throttle-abort', throttledIds });
-          for (const s of states.values()) {
+          for (const s of sequential ? active : states.values()) {
             if (isActive(s)) {
               s.stopReason = s.timesMs.length > 0 ? 'throttled' : undefined;
               if (s.timesMs.length === 0) {
@@ -305,9 +327,11 @@ export async function runSampling(
               await onUpdate(snapshot(s));
             }
           }
+          if (sequential) continue;
           break;
         }
         cooldowns += 1;
+        consecutiveDiscards = 0;
         onProgress({
           type: 'cooldown',
           attempt: cooldowns,
@@ -328,6 +352,7 @@ export async function runSampling(
 export function resolveSamplingConfig(cfg: SamplingConfig): Required<SamplingConfig> {
   const minRounds = Math.max(1, cfg.minRounds ?? DEFAULT_SAMPLING.minRounds);
   return {
+    samplingOrder: cfg.samplingOrder ?? DEFAULT_SAMPLING.samplingOrder,
     minRounds,
     maxRounds: Math.max(minRounds, cfg.maxRounds ?? DEFAULT_SAMPLING.maxRounds),
     stableRounds: Math.max(1, cfg.stableRounds ?? DEFAULT_SAMPLING.stableRounds),

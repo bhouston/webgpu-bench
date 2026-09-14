@@ -252,7 +252,7 @@ function evaluate(traces, factory, gated, display = null) {
       displayedFraction = null,
       displayedEta = null,
       lastPercent = -1,
-      renderEnabled = false;
+      renderEnabled = display === 'candidate';
     const render = () => {
       if (!renderEnabled) return;
       const fraction = gated ? p.displayFraction : p.fraction;
@@ -262,12 +262,13 @@ function evaluate(traces, factory, gated, display = null) {
       displayedFraction = percent === null ? null : percent / 100;
       const eta = p.remainingSeconds;
       displayedEta =
-        fraction === null || eta === null || (display === 'candidate' && eta < 1)
+        fraction === null || eta === null
           ? null
           : display === 'candidate'
-            ? +eta.toFixed(1)
+            ? +Math.max(0.1, eta).toFixed(1)
             : eta || null;
     };
+    if (display === 'candidate') render();
     const summary = (groups[trace.group] ??= {
       runtime: 0,
       fractionVisible: 0,

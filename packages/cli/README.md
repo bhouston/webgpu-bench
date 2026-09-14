@@ -15,14 +15,16 @@ devices.
 
 ```sh
 npx webgpu-bench                        # or: npm i -g webgpu-bench && webgpu-bench
+webgpu-bench --sampling-order round-robin # optional interleaved comparison
 webgpu-bench --filter 'f16-*'           # glob on benchmark ids
 webgpu-bench --no-report                # don't submit the run to web3dsurvey.com
 webgpu-bench --json                     # machine-readable output
 ```
 
-Progress appears on stderr once timing evidence supports a roughly 20%-accurate estimate. Until then,
-or if the estimate becomes unreliable, it shows an exact completed-benchmark count and `Estimating runtime…`. ETA has its own stricter gate.
-The results table goes to stdout once the run completes.
+Progress and a countdown appear on stderr throughout the run. An early `~` marks
+an approximate estimate; completed benchmarks refine it. Benchmarks run in catalog
+order by default so final results arrive steadily. During an unbounded pause, the
+display falls back to the exact completed-benchmark count. Results go to stdout.
 By default a finished run is submitted to [Web3D Survey](https://web3dsurvey.com/benchmark) and its result
 page URL is printed.
 
