@@ -1,0 +1,23 @@
+name: Feature or improvement
+description: Define work before implementation
+title: 'feat: '
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should change, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes that demonstrate completion.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Compatibility, scope, dependencies, or other requirements.
