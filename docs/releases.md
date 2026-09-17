@@ -20,7 +20,7 @@ The workflow is `.github/workflows/release.yml`. Do not enter a path in npm's wo
 
 ## GitHub settings
 
-Before merging a release PR:
+The adoption setup selects `dev` as the default branch and protects both `dev` and `main` with required PRs, up-to-date `ci` and `policy` checks, resolved conversations, no force pushes, and no deletion (including administrator enforcement). Squash and merge commits are enabled; rebase merging is disabled. For future setup or verification:
 
 1. Enable branch protection for `dev` and `main`, require PRs and passing `ci` and `policy` checks, block force pushes and deletion, and require branches up to date. Do not require the advisory `webkit` check. Allow merge commits on main (linear history would conflict with the release model).
 2. Allow squash merges for contributions; merge `dev` → `main` with a merge commit to retain version-bearing commits. Use a conventional title such as `chore(release): promote dev to main`.

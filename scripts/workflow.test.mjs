@@ -11,11 +11,12 @@ test('release analysis maps conventional changes to the requested bump', async (
     ['fix: correct output', 'patch'],
     ['perf: reduce allocations', 'patch'],
     ['feat: add export', 'minor'],
+    ['feat!: remove old API', 'major'],
     ['feat!: remove old API\n\nBREAKING CHANGE: use the new API', 'major'],
     ['chore: update tooling', null],
   ]) {
     const type = await analyzeCommits(
-      {},
+      { preset: 'conventionalcommits' },
       { cwd: process.cwd(), commits: [{ hash: 'test', message }], logger: { log() {} } },
     );
     assert.equal(type, expected);
