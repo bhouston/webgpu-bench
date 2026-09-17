@@ -20,15 +20,14 @@ The workflow is `.github/workflows/release.yml`. Do not enter a path in npm's wo
 
 ## GitHub settings
 
-The adoption setup selects `dev` as the default branch and protects both `dev` and `main` with required PRs, up-to-date `ci` and `policy` checks, resolved conversations, no force pushes, and no deletion (including administrator enforcement). Squash and merge commits are enabled; rebase merging is disabled. For future setup or verification:
+`main` is the default and sole active integration branch. It is protected with required PRs, up-to-date `ci` and `policy` checks, resolved conversations, no force pushes, and no deletion (including administrator enforcement). Squash merges are enabled for contribution PRs; rebase merging is disabled. For future setup or verification:
 
-1. Enable branch protection for `dev` and `main`, require PRs and passing `ci` and `policy` checks, block force pushes and deletion, and require branches up to date. Do not require the advisory `webkit` check. Allow merge commits on main (linear history would conflict with the release model).
-2. Allow squash merges for contributions; merge `dev` → `main` with a merge commit to retain version-bearing commits. Use a conventional title such as `chore(release): promote dev to main`.
-3. Optionally set `dev` as the default branch so ordinary PRs target it and linked issues close on integration.
-4. Activate the repository in Codecov for the coverage badge.
-5. Configure both npm trusted publishers before the first release merge.
+1. Enable branch protection for `main`: require PRs and passing `ci` and `policy` checks, block force pushes and deletion, and require branches up to date. Do not require the advisory `webkit` check.
+2. Set `main` as the default branch so ordinary PRs target it and linked issues close on merge.
+3. Activate the repository in Codecov for the coverage badge.
+4. Configure both npm trusted publishers before the first release.
 
-Only pushes to `main` trigger Semantic Release, after the reusable CI workflow passes. The release job has package OIDC and repository-content write permissions; PR jobs cannot publish. Releases are serialized and never cancelled midway. GitHub release comments and issue labeling are disabled, so no issue-write token permission is needed.
+Releases never run automatically. A maintainer dispatches them manually with `gh workflow run release.yml --ref main` (or via the Actions tab), after the reusable CI workflow passes on the dispatched commit. Dispatching from any ref other than `main` is rejected before any release step runs. Pass a dry run to verify staging, changelog rendering, and tag ancestry without publishing. The release job has package OIDC and repository-content write permissions; PR jobs cannot publish. Releases are serialized and never cancelled midway. GitHub release comments and issue labeling are disabled, so no issue-write token permission is needed. A dispatch with no release-worthy commits since the last tag succeeds as a no-op.
 
 ## Version baseline and release behavior
 
