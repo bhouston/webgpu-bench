@@ -54,7 +54,9 @@ test('filter matching nothing fails and lists ids', async () => {
   expect(result).toHaveStderr(/No benchmarks match "nope"\. Ids: read-linear/);
 });
 
-test('runs a filtered benchmark as a table', async () => {
+// Software WebGPU on hosted runners can exceed Vitest's default five seconds.
+// Allow the command helper's 60-second deadline to finish before the test deadline.
+test('runs a filtered benchmark as a table', { timeout: 70_000 }, async () => {
   const result = await cli.run(['--filter', 'f32-div', '--no-report']);
   expect(result).toSucceed();
   expect(result).toHaveStdout(/^Vendor\s+\S/m);
@@ -64,7 +66,7 @@ test('runs a filtered benchmark as a table', async () => {
   expect(result).toHaveStderr(/100%/);
 });
 
-test('--json prints device info and results, and --report posts them', async () => {
+test('--json prints device info and results, and --report posts them', { timeout: 70_000 }, async () => {
   const result = await cli.run(['--filter', 'f32-div', '--json', '--api-host', apiHost]);
   expect(result).toSucceed();
   const stdout = result.stdout.replace(/\nReported to .*\n$/, '');
