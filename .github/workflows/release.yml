@@ -1,8 +1,12 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (verify without publishing)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -12,7 +16,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require dispatch on main
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Release must be dispatched with --ref main (got ${{ github.ref }})."
+            exit 1
+          fi
   checks:
+    needs: guard
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
@@ -37,6 +51,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm release:stage
-      - run: pnpm release
+      - run: pnpm run release ${{ inputs.dry_run && '-- --dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -55,24 +55,22 @@ test('staging packages synchronizes versions and removes workspace and developme
   }
 });
 
-test('PR policy accepts linked work and same-repository promotions only', () => {
+test('PR policy accepts issue-linked feature branches into main only', () => {
   const dir = mkdtempSync(join(tmpdir(), 'webgpu-pr-'));
   const event = join(dir, 'event.json');
   try {
-    for (const [base, head, body, fork, accepted] of [
-      ['dev', 'feat/42-export', 'Closes #42', false, true],
-      ['dev', 'feat/42-export', 'Closes #43', false, false],
-      ['dev', 'unlinked-work', 'Closes #42', false, false],
-      ['main', 'dev', '', false, true],
-      ['main', 'dev', '', true, false],
-      ['main', 'feat/42-export', 'Closes #42', false, false],
+    for (const [base, head, body, accepted] of [
+      ['main', 'feat/42-export', 'Closes #42', true],
+      ['main', 'feat/42-export', 'Closes #43', false],
+      ['main', 'unlinked-work', 'Closes #42', false],
+      ['dev', 'feat/42-export', 'Closes #42', false],
     ]) {
       writeFileSync(
         event,
         JSON.stringify({
           pull_request: {
             base: { ref: base, repo: { full_name: 'bhouston/webgpu-bench' } },
-            head: { ref: head, repo: { full_name: fork ? 'fork/webgpu-bench' : 'bhouston/webgpu-bench' } },
+            head: { ref: head, repo: { full_name: 'bhouston/webgpu-bench' } },
             body,
           },
         }),

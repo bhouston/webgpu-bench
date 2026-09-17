@@ -2,7 +2,7 @@
 
 Describe the problem and resulting behavior.
 
-Closes #<!-- issue number; release PRs from dev to main may omit this -->
+Closes #<!-- issue number -->
 
 ## Validation
 

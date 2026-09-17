@@ -1,7 +1,7 @@
 # webgpu-bench (monorepo)
 
 [![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/bhouston/webgpu-bench/branch/dev/graph/badge.svg)](https://codecov.io/gh/bhouston/webgpu-bench)
+[![Coverage](https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg)](https://codecov.io/gh/bhouston/webgpu-bench)
 [![npm](https://img.shields.io/npm/v/webgpu-bench)](https://www.npmjs.com/package/webgpu-bench)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 

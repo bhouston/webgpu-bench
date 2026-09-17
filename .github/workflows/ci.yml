@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, edited]
   workflow_call:
