@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { createServer, type Server } from 'node:http';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { commandLine, extendMatchers } from 'vitest-command-line';
@@ -5,7 +6,11 @@ import { commandLine, extendMatchers } from 'vitest-command-line';
 extendMatchers();
 
 // Runs the built CLI end to end (needs `tsc` first, and a GPU for the benchmark tests).
-const cli = commandLine({ command: ['node', './dist/cli.js'], env: { FORCE_COLOR: '0' }, timeout: 60_000 });
+const cli = commandLine({
+  command: ['node', fileURLToPath(new URL('../dist/cli.js', import.meta.url))],
+  env: { FORCE_COLOR: '0' },
+  timeout: 60_000,
+});
 
 let server: Server;
 let apiHost: string;

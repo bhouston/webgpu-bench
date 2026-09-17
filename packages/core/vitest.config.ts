@@ -1,8 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
+  root: fileURLToPath(new URL('.', import.meta.url)),
   test: {
+    name: 'core',
     projects: [
       {
         test: {
