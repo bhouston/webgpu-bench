@@ -1,6 +1,8 @@
 # webgpu-bench (monorepo)
 
 [![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/bhouston/webgpu-bench/branch/dev/graph/badge.svg)](https://codecov.io/gh/bhouston/webgpu-bench)
+[![npm](https://img.shields.io/npm/v/webgpu-bench)](https://www.npmjs.com/package/webgpu-bench)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
 
 A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings — memory
@@ -32,6 +34,9 @@ devices. Use it as a CLI or as a library embedded in your own tools.
 
 ## Development
 
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, PR, and release workflow.
+See [release setup](docs/releases.md) for npm trusted publishing.
+
 ```bash
 pnpm install
 pnpm exec playwright install chromium webkit
@@ -41,14 +46,13 @@ pnpm tsc
 pnpm test
 ```
 
-Browser tests run in Playwright Chromium and WebKit, sequentially to avoid competing GPU workloads.
+The default test command runs Chromium, Node, and CLI tests with coverage. WebKit is a separate advisory CI job; `pnpm test:all` runs all projects locally.
 
 ```bash
 pnpm --filter webgpu-bench-core test:browser   # Both browsers (macOS with WebGPU)
 pnpm --filter webgpu-bench-core test:chromium # Chromium only
 pnpm --filter webgpu-bench-core test:webkit   # WebKit only
 ```
-
 
 ## Author
 

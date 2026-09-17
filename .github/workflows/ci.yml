@@ -1,9 +1,20 @@
 name: ci
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   ci:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,8 +52,32 @@ jobs:
 
       - name: Test
         run: |
-          pnpm --filter webgpu-bench-core exec vitest run --project node --project browser-chromium
-          pnpm --filter webgpu-bench test
+          pnpm test
+
+      - name: Workflow tests
+        run: pnpm test:workflow
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level high
+
+      - name: Package size budgets
+        run: |
+          pnpm size | tee package-size.txt
+          cat package-size.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+
+      - name: Publish coverage percentage
+        if: success() && github.event_name == 'push'
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: coverage/lcov.info
 
   webkit:
     runs-on: macos-latest
