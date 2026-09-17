@@ -41,7 +41,7 @@ pnpm size
 
 `pnpm test` includes core unit tests, Chromium WebGPU tests, CLI integration tests, and a coverage gate. Linux CI installs lavapipe for software WebGPU. WebKit runs separately on macOS as advisory because hosted runners lack Metal GPU access. Use `pnpm test:all` for all projects locally. Build before running the root tests.
 
-Coverage includes all production TypeScript in both packages. CLI subprocess code is not measured by Vitest's in-process coverage; integration tests still exercise it. Thresholds apply to aggregate statements, branches, functions, and lines; raise them as coverage improves. CI uploads HTML and LCOV reports and sends push coverage to Codecov using OIDC. Activate this public repository in Codecov to enable the percentage badge; no token is required.
+Coverage includes all production TypeScript in both packages. CLI subprocess code is not measured by Vitest's in-process coverage; integration tests still exercise it. Thresholds are 75% for aggregate statements, functions, and lines, and 70% for branches; raise them as coverage improves. CI uploads HTML and LCOV reports and sends push coverage to Codecov using OIDC. Activate this public repository in Codecov to enable the percentage badge; no token is required.
 
 Size Limit measures compressed compiled JavaScript, with budgets of 100 kB for core and 20 kB for CLI. This excludes external dependencies and native Dawn binaries; it is not the CLI's full install size. Dependency auditing fails on high or critical advisories, including development dependencies.
 
