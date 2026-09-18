@@ -43,14 +43,13 @@ jobs:
           fetch-depth: 0
       - uses: pnpm/action-setup@v5
         with:
-          version: 11.1.3
+          version: 11.26.0
       - uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm release:stage
       - run: pnpm run release ${{ inputs.dry_run && '-- --dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -5,9 +5,8 @@ export default {
   plugins: [
     ['@semantic-release/commit-analyzer', { preset: 'conventionalcommits' }],
     ['@semantic-release/release-notes-generator', { preset: 'conventionalcommits' }],
-    ['@semantic-release/exec', { prepareCmd: 'node scripts/stage-release.mjs ${nextRelease.version}' }],
-    ['@semantic-release/npm', { pkgRoot: 'packages/core/publish' }],
-    ['@semantic-release/npm', { pkgRoot: 'packages/cli/publish' }],
+    ['@anolilab/semantic-release-pnpm', { pkgRoot: 'packages/core' }],
+    ['@anolilab/semantic-release-pnpm', { pkgRoot: 'packages/cli' }],
     ['@semantic-release/github', { successComment: false, failComment: false, releasedLabels: false }],
   ],
 };

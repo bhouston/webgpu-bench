@@ -16,7 +16,7 @@ Use these exact values for both:
 | Workflow filename    | `release.yml`                               |
 | Environment          | Leave blank (no GitHub Environment is used) |
 
-The workflow is `.github/workflows/release.yml`. Do not enter a path in npm's workflow filename field. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` is needed. GitHub-hosted Ubuntu, Node 24, npm 11.5.1 or newer, and `id-token: write` provide OIDC authentication and provenance. The npm plugin also ships a compatible npm CLI. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+The workflow is `.github/workflows/release.yml`. Do not enter a path in npm's workflow filename field. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` is needed. GitHub-hosted Ubuntu, the Node version pinned in `.nvmrc`, pnpm 11.5.1 or newer, and `id-token: write` provide OIDC authentication and provenance via `pnpm publish`. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
 ## GitHub settings
 
@@ -33,15 +33,14 @@ Releases never run automatically. A maintainer dispatches them manually with `gh
 
 The existing published version is `0.9.3` for both packages. The adoption setup tags historical commit `6f065d25426d440225ca1f1787885ce5ab43c851`, which introduced those versions, as `v0.9.3`. Without this baseline Semantic Release would assume a first release of `1.0.0`.
 
-`feat` bumps minor, `fix`/`perf` bump patch, and breaking changes bump major, including while on 0.x. A maintenance-only merge may correctly produce no release. Release notes are generated as the GitHub Release changelog. Source manifests keep their development versions: the staging script copies built files, license, and README, writes the calculated version to both staged manifests, and replaces the workspace dependency with the exact released core version. The official npm plugins publish core before CLI.
+`feat` bumps minor, `fix`/`perf` bump patch, and breaking changes bump major, including while on 0.x. A maintenance-only merge may correctly produce no release. Release notes are generated as the GitHub Release changelog. Source manifests keep their development versions: `@anolilab/semantic-release-pnpm` writes the calculated version into each package's manifest in memory, rewrites the `webgpu-bench-core` workspace dependency in the CLI to the exact released core version, and runs `pnpm publish` directly from `packages/core` and `packages/cli` (packaging each via its `files` field), without touching the committed source manifests. It publishes core before CLI.
 
-Validate staging locally without publishing:
+Validate packaging locally without publishing:
 
 ```sh
 pnpm build
-pnpm release:stage
-npm pack ./packages/core/publish --dry-run
-npm pack ./packages/cli/publish --dry-run
+pnpm --filter webgpu-bench-core pack --dry-run
+pnpm --filter webgpu-bench pack --dry-run
 ```
 
 Actual OIDC authentication can only be verified inside GitHub Actions after npm setup. Do not run the release command locally to test authentication. Publication of two npm packages is not atomic. If a publish fails after a tag or one package is published, inspect npm and the GitHub release before retrying; Semantic Release does not automatically repair partially published releases. Never delete a published npm version to retry. Correct the cause and recover the missing package from the same tag, or make a new fix commit and release a new synchronized version.
