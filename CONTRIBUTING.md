@@ -25,7 +25,7 @@ Husky checks messages locally; CI checks PR titles and new commits even when loc
 
 ## Development and checks
 
-Use Node 22 or newer (CI publishing uses Node 24) and the pinned pnpm version in `package.json`.
+Use the Node version pinned in `.nvmrc` (also the floor for `engines.node`) and the pinned pnpm version in `package.json`.
 
 ```sh
 pnpm install --frozen-lockfile
