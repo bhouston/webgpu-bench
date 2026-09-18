@@ -78,36 +78,3 @@ jobs:
         with:
           use_oidc: true
           files: coverage/lcov.info
-
-  webkit:
-    runs-on: macos-latest
-    timeout-minutes: 15
-    # GitHub-hosted macOS runners have no Metal GPU access (no software
-    # fallback like lavapipe/WARP exists for WebKit's WebGPU backend either),
-    # so "no adapter"/hangs here are an infra gap, not a code regression:
-    # https://github.com/actions/runner-images/issues/7085
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 11.26.0
-          run_install: false
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright WebKit
-        run: pnpm exec playwright install webkit
-
-      - name: Test WebKit with WebGPU
-        run: pnpm --filter webgpu-bench-core test:webkit
