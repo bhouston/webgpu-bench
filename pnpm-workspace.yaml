@@ -3,6 +3,17 @@ packages:
 
 resolutionMode: highest
 
+# @commitlint/config-conventional wants conventional-changelog-conventionalcommits@^10,
+# but that major requires conventional-changelog-writer@9+ while the
+# @semantic-release/commit-analyzer and release-notes-generator plugins bundle
+# conventional-changelog-writer@^8. Without this override, pnpm's hoisted
+# node_modules/.pnpm/node_modules resolves an incompatible mixed version and
+# semantic-release's generateNotes step crashes with "Missing helper: ...
+# requires conventional-changelog-writer@9 or newer". Pin the whole graph to
+# 9.3.1, the version release-notes-generator's own test fixtures use with writer@8.
+overrides:
+  conventional-changelog-conventionalcommits: 9.3.1
+
 link-workspace-packages: true
 
 allowBuilds:
