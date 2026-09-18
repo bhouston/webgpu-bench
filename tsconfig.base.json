@@ -28,7 +28,6 @@
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-    "incremental": true,
     "moduleDetection": "force"
   }
 }
