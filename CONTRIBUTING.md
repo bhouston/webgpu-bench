@@ -8,7 +8,7 @@ These rules apply to humans, Claude, Codex, and other agents. This file is the s
 2. Branch from updated `main`, using `<type>/<issue>-<short-description>`, for example `feat/42-batch-export` or `fix/43-empty-input`. Never commit directly to `main`.
 3. Implement the issue and run the checks below. Use Conventional Commits for every commit. Reference the issue in the body when useful.
 4. Push the branch and open a PR **against `main`**, with a Conventional Commit title, a description of behavior and validation, and `Closes #42` matching the branch's issue number. Use `gh pr create --base main --body-file`. Do not merge unless requested.
-5. Squash merge contribution PRs with their Conventional Commit title and preserve any breaking-change footer.
+5. Merge contribution PRs with a merge commit; never squash or rebase-merge.
 6. Merging a PR runs CI but never publishes. When a maintainer is ready to release, they manually dispatch the release workflow with `gh workflow run release.yml --ref main`; semantic-release calculates the version, generates the changelog, creates the tag/GitHub release, and publishes through npm trusted publishing. Agents must not publish locally, manually bump versions, or dispatch the release workflow themselves.
 
 GitHub automatically closes linked issues when the PR merges into `main`, the default branch.
