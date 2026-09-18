@@ -39,7 +39,7 @@ pnpm audit --audit-level high
 pnpm size
 ```
 
-`pnpm test` includes core unit tests, Chromium WebGPU tests, CLI integration tests, and a coverage gate. Linux CI installs lavapipe for software WebGPU. WebKit runs separately on macOS as advisory because hosted runners lack Metal GPU access. Use `pnpm test:all` for all projects locally. Build before running the root tests.
+`pnpm test` includes core unit tests, Chromium WebGPU tests, CLI integration tests, and a coverage gate. Linux CI installs lavapipe for software WebGPU. WebKit tests do not run in CI because hosted macOS runners lack Metal GPU access; run `pnpm --filter webgpu-bench-core test:webkit` locally on a machine with real GPU access. Use `pnpm test:all` for all projects locally. Build before running the root tests.
 
 Coverage includes all production TypeScript in both packages. CLI subprocess code is not measured by Vitest's in-process coverage; integration tests still exercise it. Thresholds are 75% for aggregate statements, functions, and lines, and 70% for branches; raise them as coverage improves. CI uploads HTML and LCOV reports and sends push coverage to Codecov using OIDC. Activate this public repository in Codecov to enable the percentage badge; no token is required.
 
