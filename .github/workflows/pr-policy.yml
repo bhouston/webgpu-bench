@@ -22,7 +22,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Check branch, issue link, and title
+      - name: Check issue link and title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |

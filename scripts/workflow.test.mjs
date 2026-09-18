@@ -23,14 +23,14 @@ test('release analysis maps conventional changes to the requested bump', async (
   }
 });
 
-test('PR policy accepts issue-linked feature branches into main only', () => {
+test('PR policy accepts any issue-linked branch into main only', () => {
   const dir = mkdtempSync(join(tmpdir(), 'webgpu-pr-'));
   const event = join(dir, 'event.json');
   try {
     for (const [base, head, body, accepted] of [
       ['main', 'feat/42-export', 'Closes #42', true],
-      ['main', 'feat/42-export', 'Closes #43', false],
-      ['main', 'unlinked-work', 'Closes #42', false],
+      ['main', 'any-branch-name-works', 'Closes #42', true],
+      ['main', 'unlinked-work', 'no issue reference', false],
       ['dev', 'feat/42-export', 'Closes #42', false],
     ]) {
       writeFileSync(
