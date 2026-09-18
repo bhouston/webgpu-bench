@@ -13,7 +13,7 @@
     "format": "oxfmt .",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
-    "tsc": "tsc -b",
+    "tsc": "pnpm -r exec tsc --noEmit",
     "test": "vitest run --project 'core (node)' --project 'core (browser-chromium)' --project cli --coverage && node scripts/check-coverage.mjs",
     "test:all": "vitest run",
     "size": "size-limit",
@@ -41,7 +41,7 @@
     "rimraf": "^6.1.3",
     "semantic-release": "^25.0.9",
     "size-limit": "^14.0.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
   "lint-staged": {
