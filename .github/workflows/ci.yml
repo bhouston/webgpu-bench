@@ -44,6 +44,16 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify published packages include dist
+        run: |
+          for pkg in core cli; do
+            entry=$(cd "packages/$pkg" && pnpm pack --dry-run 2>&1 | grep -m1 -E '^dist/(index|cli)\.js$')
+            if [ -z "$entry" ]; then
+              echo "::error::dist entry point missing from the packed tarball for packages/$pkg; the publish step would ship a broken package."
+              exit 1
+            fi
+          done
+
       - name: Type check
         run: pnpm tsc
 
