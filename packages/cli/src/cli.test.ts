@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { createServer, type Server } from 'node:http';
+import { validate } from '@clidoc/core';
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { commandLine, extendMatchers } from 'vitest-command-line';
 
@@ -40,6 +41,15 @@ test('--version prints the package version', async () => {
   const result = await cli.run(['--version']);
   expect(result).toSucceed();
   expect(result).toHaveStdout(/^\d+\.\d+\.\d+\n$/);
+});
+
+test('docgen writes a valid OpenCLI document', async () => {
+  const result = await cli.run(['docgen']);
+  expect(result).toSucceed();
+  const document = JSON.parse(result.stdout);
+  expect(validate(document)).toMatchObject({ valid: true });
+  expect(document.commands['webgpu-bench']).toBeDefined();
+  expect(document.commands['webgpu-bench docgen']).toBeDefined();
 });
 
 test('unknown flag fails', async () => {

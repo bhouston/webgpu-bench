@@ -54,6 +54,16 @@ jobs:
             fi
           done
 
+      - name: Generate OpenCLI document
+        run: node packages/cli/dist/cli.js docgen --output opencli.json
+
+      - name: Validate OpenCLI document
+        uses: bhouston/clidoc-action@v1
+        with:
+          files: opencli.json
+          specification: bcdxn
+          format: json
+
       - name: Type check
         run: pnpm tsc
 
