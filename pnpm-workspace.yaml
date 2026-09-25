@@ -14,7 +14,7 @@ resolutionMode: highest
 overrides:
   conventional-changelog-conventionalcommits: 9.3.1
 
-link-workspace-packages: true
+linkWorkspacePackages: true
 
 allowBuilds:
   esbuild: true
