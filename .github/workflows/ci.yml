@@ -49,7 +49,7 @@ jobs:
       - run: pnpm lint
       - name: Check formatting
         run: pnpm exec oxfmt --check .
-      - run: pnpm test --coverage
+      - run: pnpm test
       - name: Workflow tests
         run: pnpm test:workflow
       - name: Package size budgets
