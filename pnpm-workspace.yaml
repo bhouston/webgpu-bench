@@ -19,3 +19,7 @@ link-workspace-packages: true
 allowBuilds:
   esbuild: true
   webgpu: false
+
+minimumReleaseAgeExclude:
+  - vitest-command-line@0.9.0
+  - yargs-file-commands@1.2.2
