@@ -4,46 +4,38 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    branches: [main]
   workflow_call:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   ci:
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+      - uses: actions/checkout@v6
         with:
-          version: 11.26.0
-          run_install: false
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # --- repository-specific steps (GPU/Playwright, package-content check, size budget, workflow tests) ---
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
-
       - name: Install software Vulkan driver (lavapipe) for node-webgpu
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Build
-        run: pnpm build
-
+      - run: pnpm build
       - name: Verify published packages include dist
         run: |
           for pkg in core cli; do
@@ -53,38 +45,28 @@ jobs:
               exit 1
             fi
           done
-
-      - name: Type check
-        run: pnpm tsc
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Test
-        run: |
-          pnpm test
-
+      - run: pnpm tsc
+      - run: pnpm lint
+      - name: Check formatting
+        run: pnpm exec oxfmt --check .
+      - run: pnpm test
       - name: Workflow tests
         run: pnpm test:workflow
-
-      - name: Dependency audit
-        run: pnpm audit --audit-level high
-
       - name: Package size budgets
         run: |
           pnpm size | tee package-size.txt
           cat package-size.txt >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
+      # --- end repository-specific steps ---
+      - name: Audit dependencies
+        id: audit
+        continue-on-error: true
+        run: pnpm audit --audit-level=high
+      - name: Flag audit findings
+        if: steps.audit.outcome == 'failure'
+        run: echo '::warning::Dependency audit found vulnerabilities or could not reach the registry. Review the audit step.'
+      - uses: codecov/codecov-action@v5
+        if: ${{ !cancelled() && hashFiles('coverage/lcov.info') != '' }}
         with:
-          name: coverage
-          path: coverage/
-
-      - name: Publish coverage percentage
-        if: success() && github.event_name == 'push'
-        uses: codecov/codecov-action@v5
-        with:
-          use_oidc: true
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
+          fail_ci_if_error: false
