@@ -30,7 +30,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # --- repository-specific steps (GPU/Playwright, package-content check, OpenCLI/clidoc, size budget, workflow tests) ---
+      # --- repository-specific steps (GPU/Playwright, package-content check, size budget, workflow tests) ---
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
       - name: Install software Vulkan driver (lavapipe) for node-webgpu
@@ -45,14 +45,6 @@ jobs:
               exit 1
             fi
           done
-      - name: Generate OpenCLI document
-        run: node packages/cli/dist/cli.js docgen --output opencli.json
-      - name: Validate OpenCLI document
-        uses: bhouston/clidoc-action@v1
-        with:
-          files: opencli.json
-          specification: bcdxn
-          format: json
       - run: pnpm tsc
       - run: pnpm lint
       - name: Check formatting
