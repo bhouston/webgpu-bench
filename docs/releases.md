@@ -20,7 +20,7 @@ The workflow is `.github/workflows/release.yml`. Do not enter a path in npm's wo
 
 ## GitHub settings
 
-`main` is the default and sole active integration branch. It is protected with required PRs, up-to-date `ci` and `policy` checks, resolved conversations, no force pushes, and no deletion (including administrator enforcement). Squash merges are enabled for contribution PRs; rebase merging is disabled. For future setup or verification:
+`main` is the default and sole active integration branch. It is protected with required PRs, up-to-date `ci` and `policy` checks, resolved conversations, no force pushes, and no deletion (including administrator enforcement). Merge commits are the only enabled merge method for contribution PRs, per [CONTRIBUTING.md](../CONTRIBUTING.md); squash and rebase merging are disabled. For future setup or verification:
 
 1. Enable branch protection for `main`: require PRs and passing `ci` and `policy` checks, block force pushes and deletion, and require branches up to date. Do not require the advisory `webkit` check.
 2. Set `main` as the default branch so ordinary PRs target it and linked issues close on merge.
