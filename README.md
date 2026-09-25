@@ -45,15 +45,30 @@ pnpm build
 pnpm lint
 pnpm tsc
 pnpm test
+pnpm test:workflow
+pnpm audit --audit-level high
+pnpm size
 ```
 
-The default test command runs Chromium, Node, and CLI tests with coverage. WebKit is a separate advisory CI job; `pnpm test:all` runs all projects locally.
+The default test command runs Chromium, Node, and CLI tests with coverage, then enforces a coverage gate.
+WebKit is a separate advisory CI job; `pnpm test:all` runs all projects locally.
 
 ```bash
 pnpm --filter webgpu-bench-core test:browser   # Both browsers (macOS with WebGPU)
 pnpm --filter webgpu-bench-core test:chromium # Chromium only
 pnpm --filter webgpu-bench-core test:webkit   # WebKit only
 ```
+
+### Coverage and size budgets
+
+Coverage covers all production TypeScript in both packages. CLI subprocess code isn't measured by
+Vitest's in-process coverage; integration tests still exercise it. Thresholds are 75% for aggregate
+statements, functions, and lines, and 70% for branches — raise them as coverage improves. Size Limit
+measures compressed compiled JavaScript, with budgets of 100 kB for core and 20 kB for CLI (external
+dependencies and native Dawn binaries are excluded).
+
+Commit history predating conventional-commits adoption is not linted retroactively; the `policy` CI job
+and the pre-commit hook only check new commits.
 
 ## Author
 
