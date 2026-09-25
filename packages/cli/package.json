@@ -36,6 +36,8 @@
     "test:coverage": "tsc && vitest run --coverage"
   },
   "dependencies": {
+    "@clidoc/core": "^1.0.0",
+    "@clidoc/yargs": "^0.1.0",
     "@sentry/node": "^10.74.0",
     "chalk": "^5.6.2",
     "webgpu": "^0.6.0",
