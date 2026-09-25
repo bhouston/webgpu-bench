@@ -4,6 +4,7 @@
 [![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
 [![npm downloads](https://img.shields.io/npm/dm/webgpu-bench-core.svg)](https://www.npmjs.com/package/webgpu-bench-core)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwupDN493R)
 
 A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings — memory
 **bandwidth** (read/write) and **FLOPS** (fp32, fp16, int8; scalar/vec4/mat4/matvec) — one operation at a
