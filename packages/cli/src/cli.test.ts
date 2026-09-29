@@ -42,6 +42,22 @@ test('--version prints the package version', async () => {
   expect(result).toHaveStdout(/^\d+\.\d+\.\d+\n$/);
 });
 
+test('docgen prints an OpenCLI document of the commands', async () => {
+  const result = await cli.run(['docgen']);
+  expect(result).toSucceed();
+  const { info, commands } = JSON.parse(result.stdout);
+  expect(info).toMatchObject({ binary: 'webgpu-bench', version: expect.stringMatching(/^\d+\.\d+\.\d+$/) });
+  expect(Object.keys(commands)).toEqual(['webgpu-bench', 'webgpu-bench docgen']);
+  expect(commands['webgpu-bench'].flags.map((f: { name: string }) => f.name)).toContain('filter');
+});
+
+test('docgen --format markdown renders a reference', async () => {
+  const result = await cli.run(['docgen', '--format', 'markdown']);
+  expect(result).toSucceed();
+  expect(result).toHaveStdout(/^## webgpu-bench docgen$/m);
+  expect(result).toHaveStdout(/`--filter`/);
+});
+
 test('unknown flag fails', async () => {
   const result = await cli.run(['--bogus']);
   expect(result).toExitWith(1);
