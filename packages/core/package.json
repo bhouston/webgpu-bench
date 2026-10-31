@@ -41,6 +41,6 @@
     "@webgpu/types": "^0.1.74"
   },
   "engines": {
-    "node": ">=26"
+    "node": ">=22"
   }
 }
