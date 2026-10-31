@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { analyzeCommits } from '@semantic-release/commit-analyzer';
 
-test('release analysis maps conventional changes to the requested bump', async () => {
+void test('release analysis maps conventional changes to the requested bump', async () => {
   for (const [message, expected] of [
     ['fix: correct output', 'patch'],
     ['perf: reduce allocations', 'patch'],
@@ -23,7 +23,7 @@ test('release analysis maps conventional changes to the requested bump', async (
   }
 });
 
-test('PR policy accepts any issue-linked branch into main only', () => {
+void test('PR policy accepts any issue-linked branch into main only', () => {
   const dir = mkdtempSync(join(tmpdir(), 'webgpu-pr-'));
   const event = join(dir, 'event.json');
   try {
