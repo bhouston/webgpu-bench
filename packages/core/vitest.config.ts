@@ -5,10 +5,12 @@ import { playwright } from '@vitest/browser-playwright';
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   test: {
+    fsModuleCache: true,
     name: 'core',
     projects: [
       {
         test: {
+          fsModuleCache: true,
           name: 'node',
           include: ['src/**/*.test.ts'],
           exclude: ['src/**/*.browser.test.ts'],
@@ -16,6 +18,7 @@ export default defineConfig({
       },
       ...(['chromium', 'webkit'] as const).map((browser, index) => ({
         test: {
+          fsModuleCache: true,
           name: `browser-${browser}`,
           include: ['src/**/*.browser.test.ts'],
           // GPU workloads must not compete with other test files or browsers.

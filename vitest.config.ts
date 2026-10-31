@@ -2,9 +2,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    fsModuleCache: true,
     projects: [
       'packages/core/vitest.config.ts',
-      { test: { name: 'cli', root: 'packages/cli', include: ['src/**/*.test.ts'] } },
+      { test: { fsModuleCache: true, name: 'cli', root: 'packages/cli', include: ['src/**/*.test.ts'] } },
     ],
     coverage: {
       provider: 'v8',
