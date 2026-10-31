@@ -175,7 +175,9 @@ export const command = defineCommand({
         console.log(`\nReported to ${chalk.underline(`${SITE}/benchmark/${id}`)}`);
       } catch (error) {
         Sentry.captureException(error);
-        console.error(chalk.yellow(`\nCould not report to ${SITE}: ${error instanceof Error ? error.message : error}`));
+        console.error(
+          chalk.yellow(`\nCould not report to ${SITE}: ${error instanceof Error ? error.message : String(error)}`),
+        );
       }
     }
   },
