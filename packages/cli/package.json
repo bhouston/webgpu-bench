@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@types/yargs": "^17.0.35",
-    "@vitest/coverage-v8": "5.0.0",
+    "@vitest/coverage-v8": "^5.0.5",
     "@webgpu/types": "^0.1.74",
     "vitest-command-line": "^0.9.1"
   },
