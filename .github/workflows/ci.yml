@@ -31,7 +31,7 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
       - name: Install software Vulkan driver (lavapipe) for node-webgpu
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers xvfb
       - run: pnpm build
       - name: Verify published packages include dist
         run: |
@@ -46,7 +46,7 @@ jobs:
       - run: pnpm lint
       - name: Check formatting
         run: pnpm exec oxfmt --check .
-      - run: pnpm test
+      - run: xvfb-run -a pnpm test
       - name: Workflow tests
         run: pnpm test:workflow
       - name: Package size budgets
