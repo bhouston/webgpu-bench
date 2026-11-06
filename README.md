@@ -1,31 +1,45 @@
-# webgpu-bench (monorepo)
+<p align="center">
+  <a href="https://npmjs.com/package/webgpu-bench"><img src="https://img.shields.io/npm/v/webgpu-bench.svg" alt="npm package"></a>
+  <a href="https://www.npmtrends.com/webgpu-bench"><img src="https://img.shields.io/npm/dw/webgpu-bench.svg" alt="npm downloads"></a>
+  <a href="https://codecov.io/gh/bhouston/webgpu-bench"><img src="https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg" alt="coverage"></a>
+  <a href="https://discord.gg/fwupDN493R"><img src="https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord" alt="discord chat"></a>
+</p>
+<br/>
 
-[![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg)](https://codecov.io/gh/bhouston/webgpu-bench)
-[![npm](https://img.shields.io/npm/v/webgpu-bench)](https://www.npmjs.com/package/webgpu-bench)
-[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwupDN493R)
+# webgpu-bench
 
-A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings — memory
-**bandwidth** (read/write) and **FLOPS** (fp32, fp16, int8; scalar/vec4/mat4/matvec) — one operation at a
+> Microbenchmarks for WebGPU: measure what your GPU can really do.
+
+- 📊 Memory Bandwidth Probes
+- 🧮 fp32, fp16 and int8 FLOPS
+- 🔬 Shader Technique Comparisons
+- 💻 CLI Without a Browser
+- 🌐 Browser Benchmark Library
+- 🌡️ Thermal Throttle Detection
+
+A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings (memory
+**bandwidth** (read/write) and **FLOPS** (fp32, fp16, int8; scalar/vec4/mat4/matvec)) one operation at a
 time in the browser, plus fixed-work comparisons of shader techniques such as layouts, workgroup sizes,
 reductions, and atomic aggregation. It is not a full app or game benchmark.
+
+This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
+operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on _your_ GPU, so you can
+make better-informed decisions when writing shaders, and understand how those costs differ across
+devices. Use it as a CLI or as a library embedded in your own tools.
 
 Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark). Read the
 [announcement post](https://ben3d.ca/blog/introducing-webgpu-bench).
 
-This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
-operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on _your_ GPU, so you can
-make better-informed decisions when writing shaders — and understand how those costs differ across
-devices. Use it as a CLI or as a library embedded in your own tools.
-
 ## Packages
 
-- [`packages/core`](packages/core) — `webgpu-bench-core`, the benchmark suite (WGSL shaders, data
-  generation, timing harness, orchestration). Framework-agnostic, browser-only, consumed as TypeScript
-  source. See its [README](packages/core/README.md).
-- [`packages/cli`](packages/cli) — `webgpu-bench` command-line runner (WebGPU via Dawn, no browser
-  needed). See its [README](packages/cli/README.md).
+| Package                            | Version (click for changelogs)                                                                                                                  |
+| ---------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [webgpu-bench](packages/cli)       | [![webgpu-bench version](https://img.shields.io/npm/v/webgpu-bench.svg?label=%20)](https://github.com/bhouston/webgpu-bench/releases)           |
+| [webgpu-bench-core](packages/core) | [![webgpu-bench-core version](https://img.shields.io/npm/v/webgpu-bench-core.svg?label=%20)](https://github.com/bhouston/webgpu-bench/releases) |
+
+- `webgpu-bench` is the command-line runner (WebGPU via Dawn, no browser needed). See its [README](packages/cli/README.md).
+- `webgpu-bench-core` is the benchmark suite (WGSL shaders, data generation, timing harness, orchestration).
+  Framework-agnostic, browser-only, consumed as TypeScript source. See its [README](packages/core/README.md).
 
 ## Screenshots
 
@@ -35,8 +49,7 @@ devices. Use it as a CLI or as a library embedded in your own tools.
 
 ## Development
 
-Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, PR, and release workflow.
-See [release setup](docs/releases.md) for npm trusted publishing.
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, and PR workflow.
 
 ```bash
 pnpm install
@@ -70,6 +83,18 @@ dependencies and native Dawn binaries are excluded).
 Commit history predating conventional-commits adoption is not linted retroactively; the `policy` CI job
 and the pre-commit hook only check new commits.
 
+## Releases
+
+See [RELEASING.md](RELEASING.md) for how releases are published and [GitHub Releases](https://github.com/bhouston/webgpu-bench/releases) for changes.
+
+## Contribution
+
+See [Contributing Guide](CONTRIBUTING.md).
+
+## License
+
+MIT
+
 ## Author
 
-Created by [Ben Houston](https://ben3d.ca) and sponsored by [Land of Assets](https://landofassets.com).
+[Ben Houston](https://ben3d.ca), Sponsored by [Land of Assets](https://landofassets.com).
