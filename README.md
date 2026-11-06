@@ -49,8 +49,7 @@ Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/be
 
 ## Development
 
-Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, PR, and release workflow.
-See [release setup](docs/releases.md) for npm trusted publishing.
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, and PR workflow.
 
 ```bash
 pnpm install
@@ -83,6 +82,10 @@ dependencies and native Dawn binaries are excluded).
 
 Commit history predating conventional-commits adoption is not linted retroactively; the `policy` CI job
 and the pre-commit hook only check new commits.
+
+## Releases
+
+See [RELEASING.md](RELEASING.md) for how releases are published and [GitHub Releases](https://github.com/bhouston/webgpu-bench/releases) for changes.
 
 ## Contribution
 
