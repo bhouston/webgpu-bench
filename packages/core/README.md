@@ -1,14 +1,24 @@
+<p align="center">
+  <a href="https://npmjs.com/package/webgpu-bench-core"><img src="https://img.shields.io/npm/v/webgpu-bench-core.svg" alt="npm package"></a>
+  <a href="https://www.npmtrends.com/webgpu-bench-core"><img src="https://img.shields.io/npm/dw/webgpu-bench-core.svg" alt="npm downloads"></a>
+  <a href="https://codecov.io/gh/bhouston/webgpu-bench"><img src="https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg" alt="coverage"></a>
+  <a href="https://discord.gg/fwupDN493R"><img src="https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord" alt="discord chat"></a>
+</p>
+<br/>
+
 # webgpu-bench-core
 
-[![npm](https://img.shields.io/npm/v/webgpu-bench-core.svg)](https://www.npmjs.com/package/webgpu-bench-core)
-[![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg)](https://codecov.io/gh/bhouston/webgpu-bench)
-[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench-core.svg)](https://www.npmjs.com/package/webgpu-bench-core)
-[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwupDN493R)
+> The WebGPU microbenchmark suite behind webgpu-bench, as a library.
 
-A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings — memory
-**bandwidth** (read/write) and **FLOPS** (fp32, fp16, int8; scalar/vec4/mat4/matvec) — one operation at a
+- 📊 Memory Bandwidth Probes
+- 🧮 fp32, fp16 and int8 FLOPS
+- 🔬 Shader Technique Comparisons
+- 🧩 Bring Your Own Benchmarks
+- 📈 Progress and ETA Tracking
+- 🌡️ Thermal Throttle Detection
+
+A microbenchmark suite for WebGPU: it isolates and benchmarks a device's raw ceilings (memory
+**bandwidth** (read/write) and **FLOPS** (fp32, fp16, int8; scalar/vec4/mat4/matvec)) one operation at a
 time in the browser, plus fixed-work shader technique comparisons. It is not a full app or game benchmark.
 
 Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/benchmark). Read the
@@ -16,7 +26,7 @@ Try it live on the [Web3D Survey: GPU Benchmark page](https://web3dsurvey.com/be
 
 This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
 operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on the user's GPU, so
-you can make better-informed decisions when writing shaders — and understand how those costs differ
+you can make better-informed decisions when writing shaders, and understand how those costs differ
 across devices.
 
 Want to run the suite from the command line instead of a browser? See
@@ -176,6 +186,14 @@ best-run headline number.
 Requires a WebGPU-capable browser (recent Chrome/Edge desktop). `f16`/`int8`-dot-product benchmarks report
 as "skipped" rather than failing when a device lacks the feature.
 
+## Contribution
+
+See [Contributing Guide](https://github.com/bhouston/webgpu-bench/blob/main/CONTRIBUTING.md).
+
+## License
+
+MIT
+
 ## Author
 
-Created by [Ben Houston](https://ben3d.ca) and sponsored by [Land of Assets](https://landofassets.com).
+[Ben Houston](https://ben3d.ca), Sponsored by [Land of Assets](https://landofassets.com).
