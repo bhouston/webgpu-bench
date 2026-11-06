@@ -1,19 +1,29 @@
+<p align="center">
+  <a href="https://npmjs.com/package/webgpu-bench"><img src="https://img.shields.io/npm/v/webgpu-bench.svg" alt="npm package"></a>
+  <a href="https://www.npmtrends.com/webgpu-bench"><img src="https://img.shields.io/npm/dw/webgpu-bench.svg" alt="npm downloads"></a>
+  <a href="https://codecov.io/gh/bhouston/webgpu-bench"><img src="https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg" alt="coverage"></a>
+  <a href="https://discord.gg/fwupDN493R"><img src="https://img.shields.io/badge/chat-discord-blue?style=flat&logo=discord" alt="discord chat"></a>
+</p>
+<br/>
+
 # webgpu-bench
 
-[![npm](https://img.shields.io/npm/v/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
-[![CI](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/bhouston/webgpu-bench/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/bhouston/webgpu-bench/branch/main/graph/badge.svg)](https://codecov.io/gh/bhouston/webgpu-bench)
-[![npm downloads](https://img.shields.io/npm/dm/webgpu-bench.svg)](https://www.npmjs.com/package/webgpu-bench)
-[![Live demo](https://img.shields.io/badge/demo-live-brightgreen)](https://web3dsurvey.com/benchmark)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwupDN493R)
+> Run WebGPU microbenchmarks from the command line, no browser needed.
 
-Run the [webgpu-bench-core](https://www.npmjs.com/package/webgpu-bench-core) GPU benchmark suite from the
-command line, no browser needed (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)). Read the
+- 💻 One-Command CLI Runner
+- 📊 Memory Bandwidth Probes
+- 🧮 fp32, fp16 and int8 FLOPS
+- 🔎 Glob Filtering by Benchmark ID
+- 🧾 Human and JSON Output
+- 🌍 Optional Web3D Survey Reporting
+
+Runs the [webgpu-bench-core](https://www.npmjs.com/package/webgpu-bench-core) GPU benchmark suite from the
+command line (WebGPU via [Dawn](https://github.com/dawn-gpu/node-webgpu)). Read the
 [announcement post](https://ben3d.ca/blog/introducing-webgpu-bench).
 
 This is a **micro-benchmark**, not a game or app benchmark: it tells you the raw cost of specific
 operations (a memory read, an fp32 FMA, an int8 dot product, a divergent branch) on your GPU, so you can
-make better-informed decisions when writing shaders — and understand how those costs differ across
+make better-informed decisions when writing shaders, and understand how those costs differ across
 devices.
 
 ![webgpu-bench CLI running](../../assets/benchmarking.webp)
@@ -104,6 +114,14 @@ write-scatter-64mb   20.10 GB/s
 Reported to https://web3dsurvey.com/benchmark/33e2e606-baec-43d2-abab-422567824435
 ```
 
+## Contribution
+
+See [Contributing Guide](https://github.com/bhouston/webgpu-bench/blob/main/CONTRIBUTING.md).
+
+## License
+
+MIT
+
 ## Author
 
-Created by [Ben Houston](https://ben3d.ca) and sponsored by [Land of Assets](https://landofassets.com).
+[Ben Houston](https://ben3d.ca), Sponsored by [Land of Assets](https://landofassets.com).
