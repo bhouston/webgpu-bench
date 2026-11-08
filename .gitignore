@@ -18,3 +18,4 @@ microbenchmark-suggestions.md
 # Agent tooling
 .claude/
 .codex/
+.cursor/
